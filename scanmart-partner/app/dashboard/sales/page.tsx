@@ -1,30 +1,32 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import QRCode from "react-qr-code"; 
-import { 
-  Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, 
+import QRCode from "react-qr-code";
+import {
+  Search, ShoppingCart, Trash2, Plus, Minus, CreditCard,
   Loader2, User, Phone, Banknote, QrCode, Printer, X, ScanBarcode, Camera,
   Lock, LogOut, ShieldCheck, Receipt, Store, Grid, List, RotateCcw,
   ChevronRight, Calculator
 } from "lucide-react";
-import BarcodeScanner from "@/components/BarcodeScanner"; 
+import BarcodeScanner from "@/components/BarcodeScanner";
+import ForgotPinModal from "@/components/ForgotPinModal";
 
 export default function SalesPage() {
-  const QRCodeAny = QRCode as any; 
+  const QRCodeAny = QRCode as any;
 
   // --- 🔐 STAFF & STORE STATES ---
   const [currentStaff, setCurrentStaff] = useState<any>(null);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showForgotPin, setShowForgotPin] = useState(false);
 
   // --- BILLING STATES ---
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [isScanning, setIsScanning] = useState(false); 
+  const [isScanning, setIsScanning] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'loose'>('scan');
 
   // --- SETTINGS ---
@@ -32,7 +34,7 @@ export default function SalesPage() {
     shop_name: "ScanMart Store",
     shop_address: "123, Market Road, City",
     shop_phone: "9876543210",
-    gstin: "", 
+    gstin: "",
     invoice_footer: "Thank you for shopping! Visit Again.",
     upi_id: "" // 🔥 Added UPI ID to default state
   });
@@ -43,46 +45,52 @@ export default function SalesPage() {
   const [totalSpent, setTotalSpent] = useState(0);
   const [isExisting, setIsExisting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi" | "card">("cash");
-  
+
   // --- RECEIPT & QR ---
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [qrRef, setQrRef] = useState("");
   const [timeLeft, setTimeLeft] = useState(60);
-  
+
+  // --- 🔥 NEW: DISCOUNT & HOLD BILL ---
+  const [discountValue, setDiscountValue] = useState(0);
+  const [discountType, setDiscountType] = useState<'percent' | 'flat'>('percent');
+  const [heldBills, setHeldBills] = useState<any[]>([]);
+  const [showHeldBills, setShowHeldBills] = useState(false);
+
   // --- INITIALIZATION ---
   useEffect(() => {
     const storedId = typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null;
     if (storedId) {
-        setActiveStoreId(storedId);
+      setActiveStoreId(storedId);
     } else {
-        fetchFirstStore();
+      fetchFirstStore();
     }
   }, []);
 
   useEffect(() => {
-      if(activeStoreId) {
-          fetchProducts();
-          fetchSettings(); // 🔥 Fetch settings when store changes
-      }
+    if (activeStoreId) {
+      fetchProducts();
+      fetchSettings(); // 🔥 Fetch settings when store changes
+    }
   }, [activeStoreId]);
 
   const fetchFirstStore = async () => {
-      const { data } = await supabase.from("stores").select("id").limit(1);
-      if(data && data.length > 0) {
-          setActiveStoreId(data[0].id);
-          localStorage.setItem("active_store_id", data[0].id);
-      }
+    const { data } = await supabase.from("stores").select("id").limit(1);
+    if (data && data.length > 0) {
+      setActiveStoreId(data[0].id);
+      localStorage.setItem("active_store_id", data[0].id);
+    }
   };
 
   const fetchProducts = async () => {
-    if(!activeStoreId) return;
+    if (!activeStoreId) return;
     const { data, error } = await supabase
-        .from("inventory")
-        .select("*, mrp")
-        .eq("store_id", activeStoreId)
-        .gt('stock', 0)
-        .eq('is_active', true);
+      .from("inventory")
+      .select("*, mrp")
+      .eq("store_id", activeStoreId)
+      .gt('stock', 0)
+      .eq('is_active', true);
 
     if (error) console.error("Error fetching products:", error);
     if (data) setProducts(data);
@@ -95,34 +103,42 @@ export default function SalesPage() {
     if (!activeStoreId) return;
 
     try {
-        // 1. Get owner_id from the store
-        const { data: storeData } = await supabase.from("stores").select("owner_id").eq("id", activeStoreId).single();
-        
-        if (storeData?.owner_id) {
-            // 2. Fetch settings for that owner
-            const { data: settingsData } = await supabase.from("store_settings").select("*").eq("id", storeData.owner_id).single();
-            if (settingsData) setStoreSettings(settingsData);
-        }
+      // 1. Get owner_id from the store
+      const { data: storeData } = await supabase.from("stores").select("owner_id").eq("id", activeStoreId).single();
+
+      if (storeData?.owner_id) {
+        // 2. Fetch settings for that owner
+        const { data: settingsData } = await supabase.from("store_settings").select("*").eq("id", storeData.owner_id).single();
+        if (settingsData) setStoreSettings(settingsData);
+      }
     } catch (error) {
-        console.error("Error loading settings:", error);
+      console.error("Error loading settings:", error);
     }
   };
 
-  // --- 🔐 STAFF LOGIN ---
+  // --- 🔥 BUG FIX 2: Staff Login - add shop_id filter for security ---
   const handleStaffLogin = async () => {
-    if (pin.length !== 4) return alert("PIN must be 4 digits");
+    if (pin.length < 4 || pin.length > 6) return alert("PIN must be 4–6 digits");
     setLoginLoading(true);
-    const { data, error } = await supabase.from("staff").select("*").eq("pin_code", pin).eq("is_active", true).single();
-    
-    if (error || !data) { 
-        alert("❌ Invalid PIN"); setPin(""); 
-    } else { 
-        if(data.role !== 'admin' && data.store_id && data.store_id !== activeStoreId) {
-            alert("❌ Access Denied: You belong to a different store.");
-            setPin("");
-        } else {
-            setCurrentStaff(data); setPin(""); 
-        }
+
+    // Get current owner's user ID to scope staff lookup
+    const { data: { user: ownerUser } } = await supabase.auth.getUser();
+
+    let query = supabase.from("staff").select("*").eq("pin_code", pin).eq("is_active", true);
+    // Add shop_id filter if we know the owner (prevents cross-shop login)
+    if (ownerUser) query = query.eq("shop_id", ownerUser.id);
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error || !data) {
+      alert("❌ Invalid PIN"); setPin("");
+    } else {
+      if (data.role !== 'admin' && data.store_id && data.store_id !== activeStoreId) {
+        alert("❌ Access Denied: You belong to a different store.");
+        setPin("");
+      } else {
+        setCurrentStaff(data); setPin("");
+      }
     }
     setLoginLoading(false);
   };
@@ -131,14 +147,14 @@ export default function SalesPage() {
 
   // --- ⌨️ KEYBOARD SHORTCUTS ---
   useEffect(() => {
-      const handleGlobalKeys = (e: KeyboardEvent) => {
-          if (!currentStaff) return;
-          if (e.key === "F2") document.getElementById("search-box")?.focus();
-          if (e.key === "F9") setPaymentMethod("cash");
-          if (e.key === "F10") setPaymentMethod("upi");
-      };
-      window.addEventListener("keydown", handleGlobalKeys);
-      return () => window.removeEventListener("keydown", handleGlobalKeys);
+    const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (!currentStaff) return;
+      if (e.key === "F2") document.getElementById("search-box")?.focus();
+      if (e.key === "F9") setPaymentMethod("cash");
+      if (e.key === "F10") setPaymentMethod("upi");
+    };
+    window.addEventListener("keydown", handleGlobalKeys);
+    return () => window.removeEventListener("keydown", handleGlobalKeys);
   }, [currentStaff]);
 
   // --- 🛒 CART LOGIC ---
@@ -149,44 +165,76 @@ export default function SalesPage() {
         if (existing.quantity >= product.stock) return prev;
         return prev.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [...prev, { 
-          ...product, 
-          mrp: Number(product.mrp || product.price), 
-          quantity: 1 
+      return [...prev, {
+        ...product,
+        mrp: Number(product.mrp || product.price),
+        quantity: 1
       }];
     });
     setSearchTerm("");
   };
 
+  // --- 🔥 BUG FIX 6: updateQuantity - auto-remove item when qty reaches 0 ---
   const updateQuantity = (id: string, delta: number) => {
-    setCart((prev) => prev.map((item) => {
-      if (item.id === id) {
-        const newQty = item.quantity + delta;
-        const product = products.find((p) => p.id === id);
-        if (newQty > 0 && product && newQty <= product.stock) return { ...item, quantity: newQty };
-      }
-      return item;
-    }));
+    setCart((prev) => {
+      const newCart = prev.map((item) => {
+        if (item.id === id) {
+          const newQty = item.quantity + delta;
+          if (newQty <= 0) return null; // ✅ Mark for removal
+          const product = products.find((p) => p.id === id);
+          if (product && newQty > product.stock) return item; // Don't exceed stock
+          return { ...item, quantity: newQty };
+        }
+        return item;
+      });
+      return newCart.filter(Boolean) as any[]; // Remove nulls
+    });
   };
 
   const removeFromCart = (id: string) => {
     setCart((prev) => prev.filter((item) => item.id !== id));
   };
 
+  // --- 🔥 NEW: Discount-aware totals calculation ---
   const calculateTotals = () => {
     let subTotal = 0; let totalSavings = 0;
     cart.forEach(item => {
       const price = Number(item.price || 0);
-      const mrp = Number(item.mrp || price); 
+      const mrp = Number(item.mrp || price);
       subTotal += price * item.quantity;
       if (mrp > price) {
-          totalSavings += (mrp - price) * item.quantity;
+        totalSavings += (mrp - price) * item.quantity;
       }
     });
-    return { subTotal, totalSavings, finalTotal: subTotal };
+    // Apply manual discount
+    let discountAmount = 0;
+    if (discountValue > 0) {
+      discountAmount = discountType === 'percent'
+        ? (subTotal * discountValue) / 100
+        : Math.min(discountValue, subTotal);
+      totalSavings += discountAmount;
+    }
+    const finalTotal = Math.max(0, subTotal - discountAmount);
+    return { subTotal, totalSavings, finalTotal, discountAmount };
   };
 
-  const { subTotal, totalSavings, finalTotal } = calculateTotals();
+  const { subTotal, totalSavings, finalTotal, discountAmount } = calculateTotals();
+
+  // --- 🔥 NEW: Hold Bill Feature ---
+  const holdCurrentBill = () => {
+    if (cart.length === 0) return alert("Cart is empty!");
+    const holdLabel = `Hold #${heldBills.length + 1} - ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    setHeldBills(prev => [...prev, { label: holdLabel, cart: [...cart], phone, name, totalSpent }]);
+    setCart([]); setPhone(""); setName(""); setTotalSpent(0); setDiscountValue(0);
+    alert(`⏸️ Bill held as "${holdLabel}"`);
+  };
+
+  const recallBill = (bill: any) => {
+    if (cart.length > 0 && !confirm("Current cart will be replaced. Continue?")) return;
+    setCart(bill.cart); setPhone(bill.phone); setName(bill.name); setTotalSpent(bill.totalSpent);
+    setHeldBills(prev => prev.filter(b => b.label !== bill.label));
+    setShowHeldBills(false);
+  };
 
   // --- 🟢 CHECKOUT LOGIC ---
   const handleCheckout = async () => {
@@ -195,63 +243,94 @@ export default function SalesPage() {
     try {
       let customerId = null;
       if (phone) {
-          const { data: customer } = await supabase.from("customers").upsert({ 
-              name: name || "Guest", 
-              phone, 
-              total_spent: totalSpent + finalTotal,
-              store_id: activeStoreId
-          }, { onConflict: 'phone' }).select().maybeSingle();
-          customerId = customer?.id;
+        const { data: customer } = await supabase.from("customers").upsert({
+          name: name || "Guest",
+          phone,
+          total_spent: totalSpent + finalTotal,
+          store_id: activeStoreId
+        }, { onConflict: 'phone' }).select().maybeSingle();
+        customerId = customer?.id;
       }
 
-      const { data: saleData, error: saleError } = await supabase.from("sales").insert([{ 
-        total_amount: Number(finalTotal.toFixed(2)), 
-        customer_id: customerId, 
+      // ── Compute profit & GST at sale time from cart ──────────
+      // Cart items already have buying_price and gst_rate from inventory fetch
+      let totalProfit = 0;
+      let totalGst = 0;
+
+      cart.forEach((item: any) => {
+        const sellPrice = Number(item.price || 0);
+        const qty = Number(item.quantity || 0);
+        const buyPrice = Number(item.buying_price || 0);
+        const gstPct = Number(item.gst_rate || 0);
+
+        if (sellPrice > 0 && qty > 0) {
+          if (gstPct > 0) {
+            const base = sellPrice / (1 + gstPct / 100);
+            const taxAmt = sellPrice - base;
+            totalGst += taxAmt * qty;
+            totalProfit += (base - buyPrice) * qty;
+          } else {
+            totalProfit += (sellPrice - buyPrice) * qty;
+          }
+        }
+      });
+
+      const { data: saleData, error: saleError } = await supabase.from("sales").insert([{
+        total_amount: Number(finalTotal.toFixed(2)),
+        customer_id: customerId,
         payment_method: paymentMethod,
-        total_savings: Number(totalSavings.toFixed(2)) || 0, 
+        total_savings: Number(totalSavings.toFixed(2)) || 0,
         staff_id: currentStaff?.id,
         store_id: activeStoreId,
         created_at: new Date().toISOString()
-      }]).select('id').single(); 
+      }]).select('id').single();
+
 
       if (saleError) throw saleError;
 
       const saleItemsData = cart.map((item) => ({
-        sale_id: saleData.id, 
-        product_id: item.id, 
-        quantity: item.quantity, 
+        sale_id: saleData.id,
+        product_id: item.id,
+        quantity: item.quantity,
         price_at_sale: Number(item.price),
-        mrp_at_sale: Number(item.mrp || item.price) 
+        mrp_at_sale: Number(item.mrp || item.price)
+        // NOTE: shop_id not included — column may not exist in sale_items table
       }));
 
-      await supabase.from("sale_items").insert(saleItemsData);
-      
+      const { error: itemsInsertError } = await supabase.from("sale_items").insert(saleItemsData);
+      if (itemsInsertError) console.error("sale_items insert error:", itemsInsertError?.message || itemsInsertError);
+
       for (const item of cart) {
-        await supabase.from("inventory").update({ stock: item.stock - item.quantity, last_sold_at: new Date().toISOString() }).eq("id", item.id);
+        await supabase.from("inventory").update({
+          stock: item.stock - item.quantity,
+          last_sold_at: new Date().toISOString()
+        }).eq("id", item.id);
       }
 
-      setLastSale({ 
-          id: saleData.id, 
-          date: new Date().toLocaleDateString('en-IN'), 
-          time: new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'}),
-          customer: { name: name || "Guest", phone: phone || "N/A" }, 
-          items: [...cart], 
-          total: finalTotal, 
-          totalSavings,
-          totalQty: cart.reduce((acc, item) => acc + item.quantity, 0),
-          paymentMethod, 
-          staffName: currentStaff?.name 
+      setLastSale({
+        id: saleData.id,
+        date: new Date().toLocaleDateString('en-IN'),
+        time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        customer: { name: name || "Guest", phone: phone || "N/A" },
+        items: [...cart],
+        total: finalTotal,
+        totalSavings,
+        totalQty: cart.reduce((acc, item) => acc + item.quantity, 0),
+        paymentMethod,
+        staffName: currentStaff?.name
       });
       setShowReceipt(true); setCart([]); setPhone(""); setName(""); fetchProducts();
     } catch (err: any) { alert("Error: " + err.message); } finally { setCheckoutLoading(false); }
   };
+
+
 
   const handlePhoneSearch = async (inputPhone: string) => {
     setPhone(inputPhone);
     if (inputPhone.length === 10) {
       const { data } = await supabase.from("customers").select("*").eq("phone", inputPhone).eq("store_id", activeStoreId).maybeSingle();
       if (data) {
-        setIsExisting(true); setName(data.name); 
+        setIsExisting(true); setName(data.name);
         setTotalSpent(data.total_spent || 0);
       } else {
         setIsExisting(false); setName(""); setTotalSpent(0);
@@ -263,7 +342,7 @@ export default function SalesPage() {
   const refreshQR = () => {
     const newRef = "SM" + Math.random().toString(36).substring(2, 9).toUpperCase();
     setQrRef(newRef);
-    setTimeLeft(60); 
+    setTimeLeft(60);
   };
 
   useEffect(() => {
@@ -284,7 +363,7 @@ export default function SalesPage() {
   const barcodeBuffer = useRef("");
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!currentStaff) return; 
+      if (!currentStaff) return;
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
 
       if (e.key === "Enter") {
@@ -303,226 +382,439 @@ export default function SalesPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [products, currentStaff]);
 
-  // --- UI: STAFF LOGIN ---
+  // --- 🔴 OFFLINE MODE ---
+  const [isOnline, setIsOnline] = useState(true);
+  const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [numpadTarget, setNumpadTarget] = useState<'mobile' | 'discount' | null>(null);
+
+  // Listen for online/offline
+  useEffect(() => {
+    const handleOnline = () => { setIsOnline(true); syncOfflineQueue(); };
+    const handleOffline = () => setIsOnline(false);
+    if (typeof window !== 'undefined') {
+      setIsOnline(navigator.onLine);
+      // Load queued sales from storage
+      const stored = localStorage.getItem('scanmart_offline_queue');
+      if (stored) setOfflineQueue(JSON.parse(stored));
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+    }
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Sync queued offline sales when back online
+  const syncOfflineQueue = async () => {
+    const stored = localStorage.getItem('scanmart_offline_queue');
+    if (!stored) return;
+    const queue: any[] = JSON.parse(stored);
+    if (queue.length === 0) return;
+    setSyncing(true);
+    const successful: string[] = [];
+    for (const sale of queue) {
+      try {
+        const { data: saleData, error } = await supabase.from('sales').insert([sale.saleRecord]).select('id').single();
+        if (!error && saleData) {
+          const items = sale.items.map((i: any) => ({ ...i, sale_id: saleData.id }));
+          await supabase.from('sale_items').insert(items);
+          for (const item of sale.stockUpdates) {
+            await supabase.from('inventory').update({ stock: item.newStock, last_sold_at: new Date().toISOString() }).eq('id', item.id);
+          }
+          successful.push(sale.id);
+        }
+      } catch (e) { /* skip failed */ }
+    }
+    const remaining = queue.filter((s: any) => !successful.includes(s.id));
+    localStorage.setItem('scanmart_offline_queue', JSON.stringify(remaining));
+    setOfflineQueue(remaining);
+    setSyncing(false);
+    if (successful.length > 0) alert(`✅ Synced ${successful.length} offline sale(s)!`);
+  };
+
+  // 🔢 On-screen numpad handler
+  const handleNumpad = (val: string) => {
+    if (numpadTarget === 'mobile') {
+      if (val === 'C') { setPhone(''); setIsExisting(false); setName(''); }
+      else if (val === '<') handlePhoneSearch(phone.slice(0, -1));
+      else if (phone.length < 10) handlePhoneSearch(phone + val);
+    } else if (numpadTarget === 'discount') {
+      if (val === 'C') setDiscountValue(0);
+      else if (val === '<') setDiscountValue(prev => Math.floor(prev / 10));
+      else setDiscountValue(prev => Number(String(prev) + val) || 0);
+    }
+  };
+
+  // --- 🛂 STAFF LOGIN SCREEN ---
   if (!currentStaff) {
     return (
-      <div className="h-screen bg-[#020617] flex items-center justify-center text-white">
-        <div className="bg-slate-900 p-8 rounded-[2rem] w-full max-w-sm border border-slate-800 shadow-2xl text-center">
-          <Lock size={32} className="text-blue-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-black uppercase italic mb-6">POS Access</h2>
-          <div className="text-[10px] uppercase font-bold text-slate-500 mb-4 bg-slate-950 p-2 rounded">
-             Store ID: {activeStoreId ? activeStoreId.slice(0,8) : "Loading..."}
+      <div className="h-screen bg-[#0a0f1e] flex items-center justify-center text-white">
+        <div className="bg-[#0f172a] p-8 rounded-[2rem] w-full max-w-sm border border-slate-800 shadow-2xl text-center relative">
+          {/* Top Bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-blue-600 rounded-t-[2rem]"></div>
+
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <div className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">ScanMart</div>
+            <div className="text-slate-500 text-[10px] font-bold">POS Terminal</div>
+            <div className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded-full ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+              {isOnline ? '● ONLINE' : '● OFFLINE'}
+            </div>
           </div>
-          <input type="password" autoFocus maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-center text-2xl font-black tracking-[1rem] outline-none mb-4" />
-          <button onClick={handleStaffLogin} className="w-full bg-blue-600 py-4 rounded-2xl font-black">{loginLoading ? "..." : "UNLOCK TERMINAL"}</button>
+
+          <Lock size={28} className="text-blue-500 mx-auto mb-3 mt-4" />
+          <h2 className="text-xl font-black uppercase italic mb-1">POS Access</h2>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-5">Enter Staff PIN (Admin: 6 digits)</p>
+
+          {/* PIN dots */}
+          <div className="flex justify-center gap-2 mb-4">
+            {[0, 1, 2, 3, 4, 5].map(i => (
+              <div key={i} className={`w-2.5 h-2.5 rounded-full transition-all ${pin.length > i ? 'bg-blue-500 scale-125 shadow shadow-blue-500/50' : 'bg-slate-700'}`} />
+            ))}
+          </div>
+
+          <input
+            type="password" autoFocus maxLength={6}
+            value={pin}
+            onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={e => e.key === 'Enter' && handleStaffLogin()}
+            className="w-full bg-slate-950 border border-slate-700 p-3 rounded-xl text-center text-2xl font-black tracking-[1rem] outline-none mb-4 text-white focus:border-blue-500 transition-all"
+            placeholder="••••"
+          />
+
+          <button onClick={handleStaffLogin} className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all active:scale-95">
+            {loginLoading ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'UNLOCK TERMINAL'}
+          </button>
+
+          <button
+            onClick={() => setShowForgotPin(true)}
+            className="mt-4 text-slate-500 hover:text-blue-400 text-xs font-bold uppercase tracking-widest transition-all block w-full"
+          >
+            Forgot PIN?
+          </button>
         </div>
+        <ForgotPinModal isOpen={showForgotPin} onClose={() => setShowForgotPin(false)} shopId={activeStoreId} />
       </div>
     );
   }
 
-  // --- 🚀 PROFESSIONAL POS UI ---
+  // ============================================================
+  //   🚀 RELIANCE POS INSPIRED LAYOUT
+  // ============================================================
+  const numpadKeys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', 'C', '<'];
+
   return (
-    <div className="flex h-screen bg-[#0b0f19] text-white overflow-hidden font-sans">
-      
-      {/* 🟢 COLUMN 1: LOOSE ITEMS (20%) */}
-      <div className="hidden lg:flex w-[20%] flex-col border-r border-slate-800 bg-[#0f172a]">
-         <div className="p-4 border-b border-slate-800">
-             <h2 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Grid size={16}/> Quick Pick</h2>
-         </div>
-         <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-             <div className="grid grid-cols-2 gap-2">
-                 {products.filter(p => !p.barcode).map(p => (
-                     <button key={p.id} onClick={() => addToCart(p)} className="bg-slate-800 p-3 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-700 transition-all text-left">
-                         <p className="font-bold text-[10px] line-clamp-2 text-white">{p.name}</p>
-                         <p className="text-blue-400 font-bold text-xs mt-1">₹{p.price}</p>
-                     </button>
-                 ))}
-             </div>
-         </div>
-         <div className="p-4 border-t border-slate-800">
-             <div className="bg-slate-900 rounded-xl p-3 flex items-center gap-3 border border-slate-800">
-                 <div className="w-8 h-8 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center font-bold text-xs">{currentStaff.name.charAt(0)}</div>
-                 <div><p className="text-[10px] text-slate-500 font-bold uppercase">Cashier</p><p className="text-xs font-bold">{currentStaff.name}</p></div>
-                 <button onClick={handleLogout} className="ml-auto text-red-500 hover:bg-red-500/10 p-1.5 rounded-lg"><LogOut size={14}/></button>
-             </div>
-         </div>
+    <div className="flex flex-col h-screen bg-[#f0f4f8] text-gray-800 overflow-hidden font-sans select-none">
+
+      {/* ⏫ TOP BAR — Reliance style */}
+      <div className="bg-[#c0392b] text-white flex items-center px-4 py-1.5 text-[11px] font-bold gap-4 flex-shrink-0 shadow-md">
+        <div className="font-black text-sm uppercase tracking-widest">ScanMart POS</div>
+        <div className="text-red-200">Emp#: {currentStaff?.name?.split(' ')[0] || 'Staff'}</div>
+        <div className="text-red-200">Store: {activeStoreId?.slice(0, 8)}</div>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-red-200">{new Date().toLocaleDateString('en-IN')} {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+          <span className={`font-black px-2 py-0.5 rounded text-[10px] ${isOnline ? 'bg-green-600 text-white' : 'bg-yellow-400 text-black'}`}>
+            {syncing ? '↻ Syncing...' : isOnline ? '● ONLINE' : `● OFFLINE${offlineQueue.length > 0 ? ` (${offlineQueue.length} queued)` : ''}`}
+          </span>
+          <button onClick={handleLogout} className="bg-red-800 hover:bg-red-900 px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
+            <LogOut size={10} /> Exit
+          </button>
+        </div>
       </div>
 
-      {/* 🔵 COLUMN 2: TRANSACTION TABLE (50%) */}
-      <div className="flex-1 flex flex-col bg-[#020617] border-r border-slate-800 relative">
-          <div className="p-4 border-b border-slate-800 flex gap-4 items-center bg-slate-900/50">
-              <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input 
-                    id="search-box"
-                    autoFocus
-                    type="text" 
-                    placeholder="Scan Barcode / Search Item (F2)" 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    onKeyDown={(e) => {
-                        if(e.key === 'Enter' && searchTerm) {
-                            const found = products.find(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode === searchTerm);
-                            if(found) addToCart(found);
-                        }
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 text-white p-3 pl-12 rounded-xl text-sm font-bold outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                  />
-              </div>
-              <div className="hidden md:flex gap-2">
-                  <button onClick={() => setIsScanning(true)} className="bg-slate-800 p-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all text-slate-400"><Camera size={18}/></button>
-              </div>
+      {/* MAIN BODY */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ============ LEFT: ITEM TABLE (60%) ============ */}
+        <div className="flex-1 flex flex-col bg-white border-r border-gray-300">
+
+          {/* Search Bar */}
+          <div className="bg-[#1a237e] p-2 flex gap-2 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-300" size={14} />
+              <input
+                id="search-box"
+                autoFocus
+                type="text"
+                placeholder="Scan Barcode or Search Item (F2)..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && searchTerm) {
+                    const found = products.find(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode === searchTerm);
+                    if (found) addToCart(found);
+                  }
+                }}
+                onFocus={() => setNumpadTarget(null)}
+                className="w-full bg-[#283593] text-white placeholder-blue-300 p-2 pl-8 rounded text-xs font-bold outline-none border border-blue-700 focus:border-blue-300"
+              />
+            </div>
+            <button onClick={() => setIsScanning(true)} className="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs font-bold flex items-center gap-1">
+              <Camera size={14} /> Scan
+            </button>
           </div>
 
-          {searchTerm && (
-              <div className="absolute top-20 left-4 right-4 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto">
-                  {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                      <div key={p.id} onClick={() => addToCart(p)} className="p-3 border-b border-slate-800 hover:bg-blue-900/20 cursor-pointer flex justify-between items-center">
-                          <span className="text-sm font-bold">{p.name}</span>
-                          <span className="text-xs font-mono text-blue-400">₹{p.price}</span>
-                      </div>
-                  ))}
+          {/* Item LIST Header */}
+          <div className="grid grid-cols-12 text-[10px] font-black text-gray-500 uppercase tracking-widest px-3 py-1.5 bg-gray-100 border-b border-gray-200">
+            <div className="col-span-1">#</div>
+            <div className="col-span-5">Item Description</div>
+            <div className="col-span-2 text-center">Qty</div>
+            <div className="col-span-2 text-right">Rate</div>
+            <div className="col-span-2 text-right">Amount</div>
+          </div>
+
+          {/* Item ROWS — Striped like Reliance POS */}
+          <div className="flex-1 overflow-y-auto">
+            {searchTerm && (
+              <div className="absolute top-28 left-2 right-[42%] bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto">
+                {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 8).map(p => (
+                  <div key={p.id} onClick={() => addToCart(p)} className="px-4 py-2 border-b border-gray-100 hover:bg-blue-50 cursor-pointer flex justify-between items-center">
+                    <div>
+                      <span className="text-sm font-bold text-gray-800">{p.name}</span>
+                      {p.barcode && <span className="text-[9px] text-gray-400 ml-2">#{p.barcode}</span>}
+                    </div>
+                    <span className="text-xs font-black text-blue-700">₹{p.price}</span>
+                  </div>
+                ))}
               </div>
+            )}
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-gray-300">
+                <ShoppingCart size={48} className="mb-3" />
+                <p className="font-bold uppercase tracking-widest text-sm">Ready to Scan</p>
+              </div>
+            ) : (
+              cart.map((item, idx) => (
+                <div key={item.id} className={`grid grid-cols-12 items-center px-3 py-2 border-b border-gray-100 group transition-all hover:bg-blue-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-[#e8f0fe]'}`}>
+                  <div className="col-span-1 text-[10px] text-gray-400 font-mono">{idx + 1}</div>
+                  <div className="col-span-5">
+                    <p className="font-bold text-xs text-gray-800 truncate">{item.name}</p>
+                    {item.barcode && <p className="text-[9px] text-gray-400">SKU: {item.barcode}</p>}
+                    {item.mrp > item.price && <span className="text-[8px] text-green-600 font-bold">♥ Save ₹{((item.mrp - item.price) * item.quantity).toFixed(0)}</span>}
+                  </div>
+                  <div className="col-span-2 flex justify-center">
+                    <div className="flex items-center border border-blue-300 rounded overflow-hidden">
+                      <button onClick={() => updateQuantity(item.id, -1)} className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-black text-sm">-</button>
+                      <span className="px-2 text-xs font-black w-7 text-center text-gray-800">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.id, 1)} className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-black text-sm">+</button>
+                    </div>
+                  </div>
+                  <div className="col-span-2 text-right text-xs font-bold text-gray-600">₹{item.price}</div>
+                  <div className="col-span-2 text-right text-xs font-black text-gray-800 flex justify-end items-center gap-1">
+                    ₹{(item.price * item.quantity).toFixed(2)}
+                    <button onClick={() => removeFromCart(item.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 p-0.5">
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* BOTTOM SUMMARY BAR — Total Discount, Item Count, Tax, Total */}
+          <div className="bg-[#1a237e] text-white px-4 py-2 grid grid-cols-5 gap-4 text-center border-t border-blue-900">
+            <div>
+              <p className="text-[8px] text-blue-300 uppercase font-bold">Items</p>
+              <p className="text-sm font-black">{cart.reduce((a, i) => a + i.quantity, 0)}</p>
+            </div>
+            <div>
+              <p className="text-[8px] text-blue-300 uppercase font-bold">Discount</p>
+              <p className="text-sm font-black">₹{discountAmount.toFixed(0)}</p>
+            </div>
+            <div>
+              <p className="text-[8px] text-blue-300 uppercase font-bold">Savings</p>
+              <p className="text-sm font-black text-green-400">₹{totalSavings.toFixed(0)}</p>
+            </div>
+            <div>
+              <p className="text-[8px] text-blue-300 uppercase font-bold">Subtotal</p>
+              <p className="text-sm font-black">₹{subTotal.toFixed(0)}</p>
+            </div>
+            <div className="bg-green-600 rounded-lg py-0.5">
+              <p className="text-[8px] text-green-200 uppercase font-bold">TOTAL</p>
+              <p className="text-base font-black">₹{finalTotal.toFixed(0)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ============ RIGHT PANEL (40%) ============ */}
+        <div className="w-[42%] flex flex-col bg-[#f8fafc] border-l border-gray-200">
+
+          {/* Customer Mobile Input */}
+          <div className="p-3 bg-white border-b border-gray-200">
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Mobile Number:</p>
+            <div
+              className={`flex items-center border-2 rounded-lg px-3 py-2 cursor-text transition-all ${numpadTarget === 'mobile' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white'
+                }`}
+              onClick={() => setNumpadTarget('mobile')}
+            >
+              <Phone size={14} className="text-gray-400 mr-2 flex-shrink-0" />
+              <span className="font-black text-gray-800 text-lg tracking-widest flex-1">{phone || <span className="text-gray-300 font-normal text-sm">Tap numpad to enter...</span>}</span>
+              {isExisting && <span className="text-[9px] bg-green-100 text-green-600 font-black px-1.5 py-0.5 rounded">VIP ❤</span>}
+            </div>
+            {isExisting && name && <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">● {name} — Spent ₹{totalSpent.toLocaleString()}</p>}
+          </div>
+
+          {/* Hold Bills section */}
+          {heldBills.length > 0 && (
+            <div className="px-3 pt-2">
+              <button onClick={() => setShowHeldBills(!showHeldBills)} className="w-full bg-amber-50 border border-amber-300 text-amber-700 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1">
+                <RotateCcw size={11} /> {heldBills.length} Held Bill(s) — Tap to Recall
+              </button>
+              {showHeldBills && (
+                <div className="bg-white border border-amber-200 rounded-lg mt-1 overflow-hidden">
+                  {heldBills.map((bill, i) => (
+                    <div key={i} className="flex items-center px-2 py-1.5 border-b border-gray-100 gap-2">
+                      <button onClick={() => recallBill(bill)} className="flex-1 text-left text-[10px] font-bold text-gray-700 hover:text-blue-600">{bill.label}</button>
+                      <button onClick={() => setHeldBills(prev => prev.filter((_, idx2) => idx2 !== i))} className="text-red-400"><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
-          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800">
-              <div className="col-span-1">#</div>
-              <div className="col-span-5">Item Description</div>
-              <div className="col-span-2 text-center">Qty</div>
-              <div className="col-span-2 text-right">Price</div>
-              <div className="col-span-2 text-right">Total</div>
+          {/* Discount Row */}
+          <div className="px-3 py-2 bg-white border-b border-gray-200 flex items-center gap-2">
+            <p className="text-[9px] font-black text-gray-400 uppercase">Discount:</p>
+            <button
+              onClick={() => setDiscountType(t => t === 'percent' ? 'flat' : 'percent')}
+              className="bg-blue-600 text-white text-[10px] font-black px-2 py-1 rounded transition-all"
+            >{discountType === 'percent' ? '%' : '₹'}</button>
+            <div
+              className={`flex-1 border-2 rounded px-2 py-1 text-sm font-black text-center cursor-text transition-all ${numpadTarget === 'discount' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-700'
+                }`}
+              onClick={() => setNumpadTarget('discount')}
+            >
+              {discountValue > 0 ? discountValue : <span className="text-gray-300 font-normal text-xs">0</span>}
+            </div>
+            {discountAmount > 0 && <span className="text-green-600 text-[10px] font-black">-₹{discountAmount.toFixed(0)}</span>}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-1">
-              {cart.map((item, idx) => (
-                  <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900/50 hover:bg-slate-900 items-center rounded-lg border border-transparent hover:border-slate-800 transition-all group">
-                      <div className="col-span-1 text-slate-500 text-xs font-mono">{idx + 1}</div>
-                      <div className="col-span-5">
-                          <p className="font-bold text-sm text-white truncate">{item.name}</p>
-                          {item.mrp > item.price && <span className="text-[9px] text-green-500 font-bold bg-green-500/10 px-1 rounded">SAVE ₹{(item.mrp - item.price).toFixed(0)}</span>}
-                      </div>
-                      <div className="col-span-2 flex justify-center">
-                          <div className="flex items-center bg-slate-950 rounded-lg border border-slate-800">
-                              <button onClick={() => updateQuantity(item.id, -1)} className="px-2 py-1 hover:bg-slate-800 rounded-l-lg text-slate-400">-</button>
-                              <span className="px-2 text-xs font-bold w-6 text-center">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.id, 1)} className="px-2 py-1 hover:bg-slate-800 rounded-r-lg text-slate-400">+</button>
-                          </div>
-                      </div>
-                      <div className="col-span-2 text-right font-mono text-sm text-slate-300">₹{item.price}</div>
-                      <div className="col-span-2 text-right font-black text-sm text-white flex justify-end gap-2 items-center">
-                          ₹{item.price * item.quantity}
-                          <button onClick={() => removeFromCart(item.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-500/10 p-1 rounded transition-all"><X size={14}/></button>
-                      </div>
-                  </div>
-              ))}
-              {cart.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
-                      <ShoppingCart size={48} className="mb-4"/>
-                      <p className="font-bold uppercase tracking-widest text-sm">Ready to Scan</p>
-                  </div>
-              )}
+          {/* ON-SCREEN NUMPAD */}
+          <div className="p-3 grid grid-cols-4 gap-2 flex-shrink-0">
+            {numpadKeys.map(k => (
+              <button
+                key={k}
+                onClick={() => handleNumpad(k)}
+                className={`py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 shadow-sm ${k === 'C' ? 'bg-red-600 text-white hover:bg-red-500' :
+                  k === '<' ? 'bg-orange-500 text-white hover:bg-orange-400' :
+                    'bg-white hover:bg-blue-600 hover:text-white text-gray-700 border border-gray-200'
+                  }`}
+              >{k === '<' ? '⌫' : k}</button>
+            ))}
+            {/* Enter / NO buttons */}
           </div>
+
+          {/* Numpad hint */}
+          <div className="flex gap-2 px-3 pb-2">
+            <button onClick={() => setNumpadTarget('mobile')} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border-2 transition-all ${numpadTarget === 'mobile' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>📱 Mobile</button>
+            <button onClick={() => setNumpadTarget('discount')} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border-2 transition-all ${numpadTarget === 'discount' ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-400'}`}>🏷️ Discount</button>
+          </div>
+
+          {/* Payment Method */}
+          <div className="px-3 pb-2 grid grid-cols-3 gap-2">
+            {(['cash', 'upi', 'card'] as const).map(m => (
+              <button key={m} onClick={() => setPaymentMethod(m)} className={`py-2.5 rounded-xl text-[10px] font-black border-2 uppercase flex items-center justify-center gap-1 transition-all ${paymentMethod === m ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400'
+                }`}>
+                {m === 'cash' && <Banknote size={13} />}
+                {m === 'upi' && <QrCode size={13} />}
+                {m === 'card' && <CreditCard size={13} />}
+                {m}
+              </button>
+            ))}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="px-3 pb-3 grid grid-cols-2 gap-2">
+            <button onClick={holdCurrentBill} className="bg-amber-500 hover:bg-amber-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
+              <RotateCcw size={14} /> Hold
+            </button>
+            <button onClick={() => { setCart([]); setPhone(''); setName(''); setDiscountValue(0); }} className="bg-red-500 hover:bg-red-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
+              <Trash2 size={14} /> Clear
+            </button>
+          </div>
+
+          {/* CHECKOUT BUTTON */}
+          <div className="px-3 pb-4 mt-auto">
+            <button
+              onClick={handleCheckout}
+              disabled={checkoutLoading || cart.length === 0}
+              className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-black uppercase text-base tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+            >
+              {checkoutLoading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} /> Pay & Print</>}
+              {!isOnline && <span className="text-[9px] bg-yellow-400 text-black px-1 rounded font-black">OFFLINE</span>}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* 🔴 COLUMN 3: ACTION PANEL (30%) */}
-      <div className="w-full md:w-[30%] bg-[#0f172a] flex flex-col h-full border-l border-slate-800">
-          <div className="p-4 border-b border-slate-800 space-y-3">
-              <div className="flex gap-2">
-                  <input type="number" placeholder="Customer Mobile" value={phone} onChange={(e) => handlePhoneSearch(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm font-bold outline-none focus:border-blue-500" />
-                  <div className={`p-3 rounded-xl border flex items-center justify-center ${isExisting ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-                      <User size={18} />
-                  </div>
-              </div>
-              <input type="text" placeholder="Customer Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm font-bold outline-none focus:border-blue-500" />
+      {/* 🧧 BARCODE SCANNER MODAL */}
+      {isScanning && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4">
+          <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-white">Camera Scanner</h3>
+              <button onClick={() => setIsScanning(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <BarcodeScanner
+              onScan={(code: string) => {
+                const product = products.find(p => p.barcode === code);
+                if (product) { addToCart(product); setIsScanning(false); }
+                else alert('Product not found: ' + code);
+              }}
+              onClose={() => setIsScanning(false)}
+            />
           </div>
+        </div>
+      )}
 
-          <div className="p-4 grid grid-cols-3 gap-2">
-              <button onClick={() => setCart([])} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 p-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all h-20">
-                  <Trash2 size={20}/>
-                  <span className="text-[9px] font-bold uppercase">Clear</span>
-              </button>
-              <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 p-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all h-20">
-                  <RotateCcw size={20}/>
-                  <span className="text-[9px] font-bold uppercase">Hold</span>
-              </button>
-              <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 p-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all h-20">
-                  <Grid size={20}/>
-                  <span className="text-[9px] font-bold uppercase">More</span>
-              </button>
-          </div>
-
-          <div className="flex-1"></div>
-
-          <div className="bg-slate-950 p-6 border-t border-slate-800 shadow-2xl">
-              <div className="space-y-2 mb-6 text-sm">
-                  <div className="flex justify-between text-slate-400"><span>Subtotal</span><span>₹{subTotal.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-green-500"><span>Savings</span><span>- ₹{totalSavings.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-white text-3xl font-black mt-2 pt-4 border-t border-slate-800">
-                      <span>Total</span>
-                      <span>₹{finalTotal.toFixed(0)}</span>
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                  {["cash", "upi", "card"].map(m => (
-                      <button key={m} onClick={() => setPaymentMethod(m as any)} className={`py-3 rounded-xl text-xs font-black border uppercase flex items-center justify-center gap-2 transition-all ${paymentMethod === m ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20" : "bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800"}`}>
-                          {m === 'cash' && <Banknote size={14}/>}
-                          {m === 'upi' && <QrCode size={14}/>}
-                          {m === 'card' && <CreditCard size={14}/>}
-                          {m}
-                      </button>
-                  ))}
-              </div>
-
-              <button onClick={handleCheckout} disabled={checkoutLoading} className="w-full bg-green-600 hover:bg-green-500 text-white py-5 rounded-2xl font-black uppercase text-lg tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-green-900/20 active:scale-95 transition-all">
-                  {checkoutLoading ? <Loader2 className="animate-spin"/> : <><Printer size={24}/> Pay & Print</>}
-              </button>
-          </div>
-      </div>
-
-      {/* 🧾 RECEIPT MODAL */}
+      {/* 🯧 RECEIPT MODAL */}
       {showReceipt && lastSale && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[200] p-4 font-mono">
           <div className="bg-white text-black p-6 w-full max-w-[350px] receipt-box shadow-2xl relative">
-            <button onClick={() => setShowReceipt(false)} className="absolute -top-12 right-0 text-white no-print"><X size={24}/></button>
+            <button onClick={() => setShowReceipt(false)} className="absolute -top-12 right-0 text-white no-print"><X size={24} /></button>
             <div className="text-center pb-4 border-b border-dashed border-gray-400">
               <h1 className="text-2xl font-black uppercase">{storeSettings.shop_name}</h1>
               <p className="text-[10px]">{storeSettings.shop_address}</p>
               <p className="text-[10px]">Ph: {storeSettings.shop_phone}</p>
             </div>
             <div className="py-2 text-[10px] space-y-1 border-b border-dashed border-gray-400">
-                <div className="flex justify-between"><span>Date:</span><span>{lastSale.date}</span></div>
-                <div className="flex justify-between"><span>Bill #:</span><span>{lastSale.id.slice(0,8)}</span></div>
+              <div className="flex justify-between"><span>Date:</span><span>{lastSale.date}</span></div>
+              <div className="flex justify-between"><span>Bill #:</span><span>{lastSale.id?.slice(0, 8) || 'OFFLINE'}</span></div>
+              <div className="flex justify-between"><span>Cashier:</span><span>{lastSale.staffName}</span></div>
             </div>
             <table className="w-full text-[10px] my-2">
-                <thead><tr className="border-b border-black text-left"><th>Item</th><th className="text-right">Qty</th><th className="text-right">Amt</th></tr></thead>
-                <tbody>
-                    {lastSale.items.map((item: any) => (
-                        <tr key={item.id}>
-                            <td className="py-1">{item.name}</td>
-                            <td className="text-right">{item.quantity}</td>
-                            <td className="text-right">{(item.price * item.quantity).toFixed(2)}</td>
-                        </tr>
-                    ))}
-                </tbody>
+              <thead><tr className="border-b border-black text-left"><th>Item</th><th className="text-right">Qty</th><th className="text-right">Amt</th></tr></thead>
+              <tbody>
+                {lastSale.items.map((item: any) => (
+                  <tr key={item.id}>
+                    <td className="py-1">{item.name}</td>
+                    <td className="text-right">{item.quantity}</td>
+                    <td className="text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
             <div className="border-t border-dashed border-gray-400 pt-2 text-right">
-                <p className="text-xl font-black">TOTAL: ₹{Math.round(lastSale.total)}</p>
-                <p className="text-[10px]">Saved: ₹{lastSale.totalSavings.toFixed(2)}</p>
+              <p className="text-xl font-black">TOTAL: ₹{Math.round(lastSale.total)}</p>
+              {lastSale.totalSavings > 0 && <p className="text-[10px]">Saved: ₹{lastSale.totalSavings.toFixed(2)}</p>}
             </div>
-            {/* 🔥 DYNAMIC QR LOGIC */}
             {lastSale.paymentMethod === 'upi' && (
               <div className="mt-4 p-3 bg-gray-100 rounded-lg text-center border border-dashed border-gray-300">
                 <div className="flex justify-center bg-white p-2 w-fit mx-auto rounded shadow-sm">
-                   <QRCodeAny 
-                       value={`upi://pay?pa=${storeSettings.upi_id || "yourupi@bank"}&pn=${storeSettings.shop_name}&am=${lastSale.total}&cu=INR&tr=${qrRef}`} 
-                       size={100} 
-                   />
+                  <QRCodeAny
+                    value={`upi://pay?pa=${storeSettings.upi_id || 'yourupi@bank'}&pn=${storeSettings.shop_name}&am=${lastSale.total}&cu=INR&tr=${qrRef}`}
+                    size={100}
+                  />
                 </div>
-                <p className="text-[9px] mt-2 font-bold uppercase">Scan to Pay Store</p>
+                <p className="text-[9px] mt-2 font-bold uppercase">Scan to Pay</p>
+                <p className="text-[8px] text-gray-500">{storeSettings.upi_id} • {timeLeft}s</p>
               </div>
             )}
-            <button onClick={() => window.print()} className="w-full bg-black text-white py-3 mt-4 font-bold no-print uppercase">Print Receipt</button>
+            <button onClick={() => window.print()} className="w-full bg-black text-white py-3 mt-4 font-bold no-print uppercase">
+              Print Receipt
+            </button>
           </div>
         </div>
       )}
