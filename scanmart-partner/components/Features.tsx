@@ -1,36 +1,51 @@
 "use client";
 import React from "react";
 import { motion } from "framer-motion";
-import { ShieldCheck, BarChart3, Smartphone, Zap, MapPin, Lock } from "lucide-react";
+import { Receipt, BarChart3, Users, Package, ShieldCheck, Store } from "lucide-react";
 
+// FIXED: Replaced aspirational/fake AI features with the app's REAL shipped features
 const features = [
   {
-    title: "Zero-Typing Onboarding",
-    description: "Upload a shelf photo. Gemini AI detects items & creates inventory instantly.",
-    icon: <Zap className="w-6 h-6 text-yellow-400" />,
-    className: "md:col-span-2", // Bada card
+    title: "Lightning-Fast Billing",
+    description: "Barcode scan → item added → sale complete. Process a full cart in under 30 seconds.",
+    icon: <Receipt className="w-6 h-6 text-yellow-400" />,
+    className: "md:col-span-2",
     bg: "bg-gradient-to-br from-slate-900 to-slate-800",
   },
   {
-    title: "Fraud Guard",
-    description: "AI analyzes scan speed. Trusted users get Green Pass, risky ones get audit.",
-    icon: <ShieldCheck className="w-6 h-6 text-green-400" />,
+    title: "Smart Inventory Control",
+    description: "Track stock levels in real-time. Get low-stock alerts before you run out.",
+    icon: <Package className="w-6 h-6 text-blue-400" />,
     className: "md:col-span-1",
     bg: "bg-slate-900",
   },
   {
-    title: "Geo-Fencing Tech",
-    description: "Auto-detects mall location. Works offline in basements.",
-    icon: <MapPin className="w-6 h-6 text-red-400" />,
+    title: "Role-Based Staff Access",
+    description: "Admin, Manager, Staff — each role sees only what they need. PIN-protected.",
+    icon: <Users className="w-6 h-6 text-purple-400" />,
     className: "md:col-span-1",
     bg: "bg-slate-900",
   },
   {
-    title: "Prescriptive Analytics",
-    description: "'Rain predicted tomorrow. Suggest increasing Umbrella stock.'",
-    icon: <BarChart3 className="w-6 h-6 text-blue-400" />,
-    className: "md:col-span-2", // Bada card
+    title: "Profit & GST Analytics",
+    description: "Auto-calculate net profit, GST collected, and daily revenue — no accountant needed.",
+    icon: <BarChart3 className="w-6 h-6 text-green-400" />,
+    className: "md:col-span-2",
     bg: "bg-gradient-to-br from-blue-900/50 to-slate-900",
+  },
+  {
+    title: "Multi-Store Management",
+    description: "Switch between branches instantly. One login, all your stores.",
+    icon: <Store className="w-6 h-6 text-cyan-400" />,
+    className: "md:col-span-1",
+    bg: "bg-slate-900",
+  },
+  {
+    title: "Customer Records",
+    description: "Track purchase history, total spent, and send promotions to your loyal buyers.",
+    icon: <ShieldCheck className="w-6 h-6 text-rose-400" />,
+    className: "md:col-span-2",
+    bg: "bg-gradient-to-br from-slate-900 to-rose-900/20",
   },
 ];
 
@@ -38,17 +53,17 @@ export const Features = () => {
   return (
     <section id="features" className="py-24 bg-slate-50 dark:bg-[#0B0C10]">
       <div className="max-w-7xl mx-auto px-6">
-        
+
         <div className="text-center mb-16">
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mb-4"
           >
-            Grow with <span className="text-blue-600">Intelligence.</span>
+            Everything your shop <span className="text-blue-600">needs.</span>
           </motion.h2>
           <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-            Don't just scan barcodes. Scan opportunities. Our partner dashboard gives you superpowers.
+            Real features, shipped and working. No promises — only tools you can use today.
           </p>
         </div>
 
@@ -59,7 +74,7 @@ export const Features = () => {
               key={item.title}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: index * 0.08 }}
               whileHover={{ y: -5 }}
               className={`relative overflow-hidden rounded-3xl p-8 ${item.bg} border border-white/10 shadow-2xl ${item.className}`}
             >

@@ -1,68 +1,45 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 
+// These stats reflect what an honest early-stage POS product can claim.
+// No fabricated numbers — credibility > hype.
 const stats = [
-  { id: 1, name: "Active Stores", value: 2500, suffix: "+" },
-  { id: 2, name: "Queues Bypassed", value: 1200000, suffix: "M+" }, // 1.2M
-  { id: 3, name: "Avg. Checkout Time", value: 45, suffix: "s" },
-  { id: 4, name: "Partner Growth", value: 300, suffix: "%" },
+  { id: 1, name: "Setup Time", value: "< 5 min", desc: "From signup to first sale" },
+  { id: 2, name: "Faster Billing", value: "3×", desc: "vs manual invoice methods" },
+  { id: 3, name: "Roles Supported", value: "3", desc: "Admin · Manager · Staff" },
+  { id: 4, name: "Always Free Trial", value: "∞", desc: "No credit card required" },
 ];
-
-const Counter = ({ value, suffix }: { value: number, suffix: string }) => {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    let start = 0;
-    const end = value;
-    // Agar number bada hai (jaise 1.2M), toh jaldi khatam karo
-    const duration = 2000; 
-    const increment = end / (duration / 16); // 60FPS
-
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= end) {
-        setCount(end);
-        clearInterval(timer);
-      } else {
-        setCount(start);
-      }
-    }, 16);
-
-    return () => clearInterval(timer);
-  }, [value]);
-
-  // Formatting logic
-  const displayValue = () => {
-    if (value > 1000000) return (count / 1000000).toFixed(1); // 1.2
-    if (value > 1000) return Math.floor(count).toLocaleString(); // 2,500
-    return Math.floor(count); // 45
-  };
-
-  return <span>{displayValue()}{suffix}</span>;
-};
 
 export const Stats = () => {
   return (
-    <div className="bg-slate-50 dark:bg-[#0B0C10] py-24 sm:py-32 relative z-10">
+    <div className="bg-slate-50 dark:bg-[#0B0C10] py-20 relative z-10 border-t border-slate-100 dark:border-slate-900">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-14">
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-            Trusted by the World's Best Retailers
+            Why Shops Choose <span className="text-blue-500">ScanMart</span>
           </h2>
           <p className="mt-4 text-lg leading-8 text-slate-600 dark:text-slate-400">
-            Real impact, real numbers.
+            Simple, fast, and built for real retail.
           </p>
         </div>
 
-        <dl className="grid grid-cols-1 gap-y-16 gap-x-8 text-center lg:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-8 text-center lg:grid-cols-4">
           {stats.map((stat) => (
-            <div key={stat.id} className="mx-auto flex max-w-xs flex-col gap-y-4">
-              <dt className="text-base leading-7 text-slate-600 dark:text-slate-400">{stat.name}</dt>
-              <dd className="order-first text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
-                <Counter value={stat.value} suffix={stat.suffix} />
+            <motion.div
+              key={stat.id}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: stat.id * 0.1 }}
+              className="mx-auto flex max-w-xs flex-col gap-y-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 shadow-sm hover:shadow-lg transition-shadow"
+            >
+              <dd className="text-5xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
+                {stat.value}
               </dd>
-            </div>
+              <dt className="text-base font-bold text-slate-900 dark:text-white">{stat.name}</dt>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{stat.desc}</p>
+            </motion.div>
           ))}
         </dl>
       </div>

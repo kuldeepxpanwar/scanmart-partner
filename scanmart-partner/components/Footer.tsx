@@ -1,82 +1,91 @@
 "use client";
 import React from "react";
-import { Zap, Twitter, Linkedin, Instagram, Github, Send } from "lucide-react";
+import { Zap, Twitter, Linkedin, Instagram, Github } from "lucide-react";
 
 export const Footer = () => {
   return (
     <footer className="bg-slate-900 border-t border-slate-800 pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-6">
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-          
-          {/* Brand & Newsletter Column */}
+
+          {/* Brand Column */}
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center gap-2 mb-6">
               <div className="p-2 bg-blue-600 rounded-lg">
                 <Zap className="text-white w-5 h-5 fill-current" />
               </div>
+              {/* FIXED: Brand name updated to ScanMart */}
               <span className="text-xl font-bold text-white">
-                ScanMart<span className="text-blue-500">.Partner</span>
+                Scan<span className="text-blue-500">Mart</span>
               </span>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              Empowering retailers with autonomous checkout technology. Zero queues, maximum efficiency.
+              A complete POS system for Indian retail — billing, inventory, staff, and analytics in one dashboard.
             </p>
-            
-            {/* Newsletter Input */}
-            <div className="relative">
-              <input 
-                type="email" 
-                placeholder="Enter your email" 
-                className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-lg py-3 px-4 focus:outline-none focus:border-blue-500 transition-colors"
-              />
-              <button className="absolute right-2 top-2 p-1 bg-blue-600 rounded-md hover:bg-blue-700 transition">
-                <Send className="w-4 h-4 text-white" />
-              </button>
-            </div>
+            <a
+              href="/login"
+              className="inline-block px-5 py-2.5 bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-bold rounded-xl"
+            >
+              Open Dashboard →
+            </a>
           </div>
 
-          {/* Links Columns */}
+          {/* Product Links — only links that actually exist */}
           <div>
             <h3 className="text-white font-semibold mb-6">Product</h3>
             <ul className="space-y-4 text-sm text-slate-400">
-              {["Features", "Pricing", "Hardware", "Integrations", "API Docs"].map((item) => (
-                <li key={item}>
-                  <a href="#" className="hover:text-blue-400 transition-colors">{item}</a>
+              {[
+                { label: "Billing (POS)", href: "/dashboard/sales" },
+                { label: "Inventory", href: "/dashboard/inventory" },
+                { label: "Analytics", href: "/dashboard/analytics" },
+                { label: "Customers", href: "/dashboard/customers" },
+                { label: "Team Access", href: "/dashboard/staff" },
+              ].map((item) => (
+                <li key={item.label}>
+                  <a href={item.href} className="hover:text-blue-400 transition-colors">
+                    {item.label}
+                  </a>
                 </li>
               ))}
             </ul>
           </div>
 
+          {/* Company */}
           <div>
             <h3 className="text-white font-semibold mb-6">Company</h3>
             <ul className="space-y-4 text-sm text-slate-400">
-              {["About Us", "Careers", "Blog", "Press Kit", "Contact"].map((item) => (
+              {["About Us", "Contact", "Blog"].map((item) => (
                 <li key={item}>
-                  <a href="#" className="hover:text-blue-400 transition-colors">{item}</a>
+                  <a href="#contact" className="hover:text-blue-400 transition-colors">
+                    {item}
+                  </a>
                 </li>
               ))}
             </ul>
           </div>
 
+          {/* Legal */}
           <div>
             <h3 className="text-white font-semibold mb-6">Legal</h3>
             <ul className="space-y-4 text-sm text-slate-400">
-              {["Privacy Policy", "Terms of Service", "Cookie Policy", "Security"].map((item) => (
+              {["Privacy Policy", "Terms of Service"].map((item) => (
                 <li key={item}>
-                  <a href="#" className="hover:text-blue-400 transition-colors">{item}</a>
+                  <span className="text-slate-600 cursor-default">{item}</span>
                 </li>
               ))}
             </ul>
+            <p className="text-slate-600 text-xs mt-4">Coming soon</p>
           </div>
         </div>
 
         {/* Bottom Bar */}
         <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+          {/* FIXED: Year updated to 2026 */}
           <div className="text-slate-500 text-sm">
-            © 2024 ScanMart Inc. All rights reserved.
+            © 2026 ScanMart. All rights reserved.
           </div>
-          
+
           <div className="flex gap-6">
             {[Twitter, Linkedin, Instagram, Github].map((Icon, i) => (
               <a key={i} href="#" className="text-slate-500 hover:text-white transition-colors">

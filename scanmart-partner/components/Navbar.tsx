@@ -20,22 +20,21 @@ export const Navbar = () => {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        scrolled
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled
           ? "bg-white/10 backdrop-blur-md border-b border-white/10 shadow-xl dark:bg-black/40"
           : "bg-transparent"
-      }`}
+        }`}
     >
       <div className="max-w-7xl mx-auto px-6 sm:px-16">
         <div className="flex items-center justify-between h-20">
-          
+
           {/* Logo - Click karne par Home par layega */}
           <Link href="/" className="flex items-center gap-2 cursor-pointer group">
             <div className="p-2 bg-gradient-to-tr from-blue-600 to-cyan-500 rounded-lg shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform">
               <Zap className="text-white w-5 h-5 fill-current" />
             </div>
             <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-              ScanMart<span className="text-blue-500">.Partner</span>
+              Scan<span className="text-blue-500">Mart</span>
             </span>
           </Link>
 
@@ -60,7 +59,7 @@ export const Navbar = () => {
                 Log In
               </button>
             </Link>
-            
+
             <Link href="/login">
               <button className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-full shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95">
                 Get Started <ChevronRight size={16} />
@@ -70,8 +69,8 @@ export const Navbar = () => {
 
           {/* Mobile Toggle */}
           <div className="md:hidden">
-            <button 
-              onClick={() => setIsOpen(!isOpen)} 
+            <button
+              onClick={() => setIsOpen(!isOpen)}
               className="p-2 text-slate-800 dark:text-white rounded-md hover:bg-white/10 transition-colors"
             >
               {isOpen ? <X /> : <Menu />}
@@ -83,7 +82,7 @@ export const Navbar = () => {
       {/* Mobile Menu Dropdown */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -92,9 +91,9 @@ export const Navbar = () => {
             <div className="flex flex-col p-6 gap-4">
               {/* ✅ FIX: Mobile Menu me ab Contact bhi hai aur click par menu close hoga */}
               {["Features", "Tech Stack", "Security", "Contact"].map((item) => (
-                <a 
-                  key={item} 
-                  href={`#${item.toLowerCase().replace(" ", "-")}`} 
+                <a
+                  key={item}
+                  href={`#${item.toLowerCase().replace(" ", "-")}`}
                   onClick={() => setIsOpen(false)}
                   className="text-lg font-medium text-slate-800 dark:text-slate-200 hover:text-blue-500 transition-colors"
                 >
@@ -102,7 +101,7 @@ export const Navbar = () => {
                 </a>
               ))}
               <hr className="border-gray-200 dark:border-gray-800 my-2" />
-              
+
               <Link href="/login" onClick={() => setIsOpen(false)}>
                 <button className="w-full py-4 bg-blue-600 hover:bg-blue-700 transition-colors text-white rounded-xl font-bold shadow-lg shadow-blue-500/20">
                   Get Started
