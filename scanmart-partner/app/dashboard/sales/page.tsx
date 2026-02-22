@@ -810,6 +810,11 @@ export default function SalesPage() {
             <button onClick={() => { setCart([]); setPhone(''); setName(''); setDiscountValue(0); }} className="bg-red-500 hover:bg-red-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
               <Trash2 size={14} /> Clear
             </button>
+            {lastSale && (
+              <button onClick={() => setShowReceipt(true)} className="col-span-2 bg-slate-700 hover:bg-slate-600 text-white py-2.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
+                <Printer size={13} /> Reprint Last Bill
+              </button>
+            )}
           </div>
 
           {/* CHECKOUT BUTTON */}
@@ -846,51 +851,75 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* 🯧 RECEIPT MODAL */}
+      {/* 🧧 RECEIPT MODAL */}
       {showReceipt && lastSale && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[200] p-4 font-mono">
-          <div className="bg-white text-black p-6 w-full max-w-[350px] receipt-box shadow-2xl relative">
+          <div className="bg-white text-black p-5 w-full max-w-[320px] receipt-box shadow-2xl relative text-[11px]">
             <button onClick={() => setShowReceipt(false)} className="absolute -top-12 right-0 text-white no-print"><X size={24} /></button>
-            <div className="text-center pb-4 border-b border-dashed border-gray-400">
-              <h1 className="text-2xl font-black uppercase">{storeSettings.shop_name}</h1>
-              <p className="text-[10px]">{storeSettings.shop_address}</p>
-              <p className="text-[10px]">Ph: {storeSettings.shop_phone}</p>
+
+            {/* Store Header */}
+            <div className="text-center pb-3 border-b border-dashed border-gray-400">
+              <h1 className="text-base font-black uppercase leading-tight">{storeSettings.shop_name}</h1>
+              <p className="text-[9px] mt-0.5">{storeSettings.shop_address}</p>
+              <p className="text-[9px]">Ph: {storeSettings.shop_phone}</p>
+              {storeSettings.gstin && <p className="text-[9px] font-bold">GSTIN: {storeSettings.gstin}</p>}
             </div>
-            <div className="py-2 text-[10px] space-y-1 border-b border-dashed border-gray-400">
+
+            {/* Bill details */}
+            <div className="py-2 space-y-0.5 border-b border-dashed border-gray-400">
+              <div className="flex justify-between"><span>Invoice:</span><span className="font-bold">{lastSale.invoiceNumber || lastSale.id?.slice(0, 8)}</span></div>
               <div className="flex justify-between"><span>Date:</span><span>{lastSale.date}</span></div>
-              <div className="flex justify-between"><span>Bill #:</span><span>{lastSale.id?.slice(0, 8) || 'OFFLINE'}</span></div>
               <div className="flex justify-between"><span>Cashier:</span><span>{lastSale.staffName}</span></div>
+              {lastSale.customerName && <div className="flex justify-between"><span>Customer:</span><span>{lastSale.customerName}</span></div>}
+              {lastSale.customerPhone && <div className="flex justify-between"><span>Phone:</span><span>{lastSale.customerPhone}</span></div>}
             </div>
-            <table className="w-full text-[10px] my-2">
-              <thead><tr className="border-b border-black text-left"><th>Item</th><th className="text-right">Qty</th><th className="text-right">Amt</th></tr></thead>
+
+            {/* Items */}
+            <table className="w-full my-2">
+              <thead><tr className="border-b border-black text-left text-[9px] font-black uppercase"><th className="pb-1">Item</th><th className="text-center">Qty</th><th className="text-right">Rate</th><th className="text-right">Amt</th></tr></thead>
               <tbody>
-                {lastSale.items.map((item: any) => (
-                  <tr key={item.id}>
-                    <td className="py-1">{item.name}</td>
-                    <td className="text-right">{item.quantity}</td>
-                    <td className="text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                {lastSale.items.map((item: any, idx: number) => (
+                  <tr key={item.id || idx} className="border-b border-dotted border-gray-200">
+                    <td className="py-0.5 pr-1 leading-tight max-w-[120px] truncate">{item.name}</td>
+                    <td className="text-center">{item.quantity}</td>
+                    <td className="text-right">{Number(item.price).toFixed(0)}</td>
+                    <td className="text-right font-bold">{(item.price * item.quantity).toFixed(0)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="border-t border-dashed border-gray-400 pt-2 text-right">
-              <p className="text-xl font-black">TOTAL: ₹{Math.round(lastSale.total)}</p>
-              {lastSale.totalSavings > 0 && <p className="text-[10px]">Saved: ₹{lastSale.totalSavings.toFixed(2)}</p>}
+
+            {/* Totals */}
+            <div className="border-t border-dashed border-gray-400 pt-2 space-y-0.5">
+              {lastSale.totalSavings > 0 && <div className="flex justify-between text-gray-500"><span>Discount:</span><span>-₹{lastSale.totalSavings.toFixed(2)}</span></div>}
+              <div className="flex justify-between text-base font-black border-t border-black pt-1 mt-1">
+                <span>TOTAL</span><span>₹{Math.round(lastSale.total)}</span>
+              </div>
+              <div className="flex justify-between text-[9px] text-gray-500"><span>Payment:</span><span className="uppercase font-bold">{lastSale.paymentMethod}</span></div>
             </div>
+
+            {/* UPI QR */}
             {lastSale.paymentMethod === 'upi' && (
-              <div className="mt-4 p-3 bg-gray-100 rounded-lg text-center border border-dashed border-gray-300">
-                <div className="flex justify-center bg-white p-2 w-fit mx-auto rounded shadow-sm">
+              <div className="mt-3 p-2 bg-gray-100 rounded text-center border border-dashed border-gray-300">
+                <div className="flex justify-center bg-white p-1.5 w-fit mx-auto rounded">
                   <QRCodeAny
                     value={`upi://pay?pa=${storeSettings.upi_id || 'yourupi@bank'}&pn=${storeSettings.shop_name}&am=${lastSale.total}&cu=INR&tr=${qrRef}`}
-                    size={100}
+                    size={88}
                   />
                 </div>
-                <p className="text-[9px] mt-2 font-bold uppercase">Scan to Pay</p>
-                <p className="text-[8px] text-gray-500">{storeSettings.upi_id} • {timeLeft}s</p>
+                <p className="text-[8px] mt-1 font-bold uppercase">Scan to Pay • {timeLeft}s</p>
+                <p className="text-[8px] text-gray-500">{storeSettings.upi_id}</p>
               </div>
             )}
-            <button onClick={() => window.print()} className="w-full bg-black text-white py-3 mt-4 font-bold no-print uppercase">
-              Print Receipt
+
+            {/* Footer */}
+            {storeSettings.invoice_footer && (
+              <p className="text-center text-[9px] text-gray-500 mt-3 border-t border-dashed border-gray-300 pt-2">{storeSettings.invoice_footer}</p>
+            )}
+            <p className="text-center text-[8px] text-gray-400 mt-1">Powered by ScanMart</p>
+
+            <button onClick={() => window.print()} className="w-full bg-black text-white py-3 mt-4 font-bold no-print uppercase text-xs rounded">
+              🖨️ Print Receipt
             </button>
           </div>
         </div>
@@ -901,8 +930,21 @@ export default function SalesPage() {
           body * { visibility: hidden; }
           .no-print { display: none !important; }
           .receipt-box, .receipt-box * { visibility: visible; }
-          .receipt-box { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; box-shadow: none; }
-          @page { size: 80mm auto; margin: 0; }
+          .receipt-box {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 80mm;
+            margin: 0;
+            padding: 4mm;
+            box-shadow: none;
+            font-size: 10pt;
+            font-family: monospace;
+          }
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
         }
       `}</style>
     </div>

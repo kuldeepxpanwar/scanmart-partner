@@ -1,9 +1,11 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Sidebar from "../../components/Sidebar";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, X } from "lucide-react";
+import { applyTheme, getTheme } from "@/lib/theme";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
@@ -31,13 +33,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   useEffect(() => {
+    // Apply saved theme on mount
+    applyTheme(getTheme());
+
     checkStock();
-    // Real-time update logic
     const subscription = supabase
       .channel('stock_alerts')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inventory' }, () => checkStock())
       .subscribe();
-
     return () => { supabase.removeChannel(subscription); };
   }, []);
 
@@ -73,7 +76,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* 📊 Main Content Area: Is container ki wajah se Stickers aur Analytics sahi dikhenge */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </div>
       </main>
     </div>

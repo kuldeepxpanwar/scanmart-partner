@@ -1,25 +1,81 @@
 @import "tailwindcss";
 
-/* 🔥 Smooth Scrolling Enable Kar Diya Hai */
+/* 🔥 Smooth Scrolling */
 html {
   scroll-behavior: smooth;
 }
 
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --card-bg: #0f172a;
+  --border: #1e293b;
+  --muted: #64748b;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ☀️ Light Theme Override */
+[data-theme="light"] {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --border: #e2e8f0;
+  --muted: #94a3b8;
 }
+
+[data-theme="light"] .bg-\[\#020617\] { background-color: #f1f5f9 !important; }
+[data-theme="light"] .bg-slate-900 { background-color: #ffffff !important; }
+[data-theme="light"] .bg-slate-900\/40 { background-color: rgba(255,255,255,0.9) !important; }
+[data-theme="light"] .bg-slate-950 { background-color: #f8fafc !important; }
+[data-theme="light"] .bg-slate-800 { background-color: #e2e8f0 !important; }
+[data-theme="light"] .border-slate-800 { border-color: #cbd5e1 !important; }
+[data-theme="light"] .border-slate-700 { border-color: #94a3b8 !important; }
+[data-theme="light"] .text-white { color: #0f172a !important; }
+[data-theme="light"] .text-slate-300 { color: #374151 !important; }
+[data-theme="light"] .text-slate-400 { color: #4b5563 !important; }
+[data-theme="light"] .text-slate-500 { color: #6b7280 !important; }
+[data-theme="light"] .text-slate-600 { color: #9ca3af !important; }
+[data-theme="light"] .hover\:bg-slate-800\/40:hover { background-color: rgba(226,232,240,0.7) !important; }
+[data-theme="light"] body { background-color: #f1f5f9; color: #0f172a; }
 
 body {
-  color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+
+/* 🖨️ Thermal Receipt Print */
+@media print {
+  body * { visibility: hidden !important; }
+  .no-print { display: none !important; }
+  .receipt-print-area, .receipt-print-area * { visibility: visible !important; }
+  .receipt-print-area {
+    position: fixed !important;
+    left: 0 !important; top: 0 !important;
+    width: 80mm !important;
+    margin: 0 !important; padding: 4mm !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 9pt !important;
+  }
+  @page { size: 80mm auto; margin: 0; }
+}
+
+/* 🏷️ Barcode Label Print */
+@media print {
+  .barcode-label-area, .barcode-label-area * { visibility: visible !important; }
+  .barcode-label-area {
+    position: fixed !important;
+    left: 0 !important; top: 0 !important;
+    width: 60mm !important; height: auto !important;
+    margin: 0 !important; padding: 3mm !important;
+    font-family: monospace !important;
+  }
+  @page { size: 60mm 40mm; margin: 0; }
 }

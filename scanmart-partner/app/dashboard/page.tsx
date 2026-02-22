@@ -62,6 +62,8 @@ export default function DashboardHome() {
     myOrdersCount: 0, cashInHand: 0,
   });
   const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [weeklyData, setWeeklyData] = useState<{ day: string; rev: number }[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<{ name: string; stock: number }[]>([]);
 
   useEffect(() => { checkActiveSession(); }, []);
 
@@ -248,6 +250,36 @@ export default function DashboardHome() {
         cashInHand: myCash,
       });
 
+      // ── Weekly chart data (real) ─────────────────────────────
+      const weekDays: { day: string; rev: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+        const dEnd = new Date(d);
+        dEnd.setHours(23, 59, 59, 999);
+        const { data: dayData } = await supabase
+          .from("sales")
+          .select("total_amount")
+          .eq("store_id", storeId)
+          .gte("created_at", d.toISOString())
+          .lte("created_at", dEnd.toISOString());
+        const rev = (dayData || []).reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
+        weekDays.push({ day: d.toLocaleDateString("en-IN", { weekday: "short" }), rev });
+      }
+      setWeeklyData(weekDays);
+
+      // ── Low stock names ──────────────────────────────────────
+      const { data: lowItems } = await supabase
+        .from("inventory")
+        .select("name, stock")
+        .eq("store_id", storeId)
+        .lt("stock", 5)
+        .gt("stock", -1)
+        .order("stock", { ascending: true })
+        .limit(5);
+      setLowStockItems(lowItems || []);
+
       if (salesData) setRecentSales(salesData);
 
     } catch (err) {
@@ -354,6 +386,26 @@ export default function DashboardHome() {
         )}
       </div>
 
+      {/* Low Stock Alert Banner */}
+      {isAdmin && lowStockItems.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-red-400 font-black text-sm flex-shrink-0">
+            <Package size={16} className="animate-pulse" />
+            {lowStockItems.length} item{lowStockItems.length > 1 ? 's' : ''} critically low:
+          </div>
+          <div className="flex gap-2 flex-wrap flex-1">
+            {lowStockItems.map((item, i) => (
+              <span key={i} className="bg-red-500/10 border border-red-500/20 text-red-300 text-[10px] font-black px-2 py-1 rounded-lg">
+                {item.name} ({item.stock} left)
+              </span>
+            ))}
+          </div>
+          <a href="/dashboard/inventory" className="text-red-400 hover:text-red-300 text-[10px] font-black uppercase tracking-widest flex-shrink-0 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all">
+            Reorder →
+          </a>
+        </div>
+      )}
+
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stickers.map((s, i) => (
@@ -375,17 +427,27 @@ export default function DashboardHome() {
           <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-8 rounded-[3rem] min-h-[400px] flex flex-col justify-between shadow-xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-black italic uppercase tracking-widest flex items-center gap-2"><TrendingUp className="text-blue-500" /> Sales <span className="text-white">Trend</span></h3>
-              <div className="bg-slate-950 px-4 py-2 rounded-xl border border-slate-800"><span className="text-[10px] font-bold text-slate-400">LIVE DATA</span></div>
+              <div className="bg-slate-950 px-4 py-2 rounded-xl border border-slate-800"><span className="text-[10px] font-bold text-slate-400">LAST 7 DAYS</span></div>
             </div>
             <div className="flex-1 w-full bg-slate-950/50 rounded-[2rem] border border-dashed border-slate-800 flex items-end justify-around p-6 gap-2 relative overflow-hidden group">
               <div className="absolute inset-0 bg-blue-500/5 blur-3xl group-hover:bg-blue-500/10 transition-all"></div>
-              {[35, 60, 45, 80, 55, 90, 70].map((h, i) => (
-                <div key={i} className="w-full relative group/bar">
-                  <div className="bg-gradient-to-t from-blue-900 to-blue-500 rounded-t-lg w-full absolute bottom-0 transition-all duration-1000 group-hover/bar:to-blue-400" style={{ height: `${h}%` }}></div>
-                </div>
-              ))}
+              {(weeklyData.length > 0 ? weeklyData : [...Array(7)].map((_, i) => ({ day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i], rev: 0 }))).map((d, i) => {
+                const maxRev = Math.max(...(weeklyData.map(w => w.rev)), 1);
+                const h = weeklyData.length > 0 ? Math.max(4, (d.rev / maxRev) * 100) : 8;
+                return (
+                  <div key={i} className="w-full relative flex flex-col items-center gap-1 group/bar">
+                    <span className="text-[9px] text-slate-600 font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity">
+                      {d.rev > 0 ? `₹${Math.round(d.rev / 1000)}k` : ''}
+                    </span>
+                    <div className="w-full relative">
+                      <div className="bg-gradient-to-t from-blue-900 to-blue-500 rounded-t-lg w-full absolute bottom-0 transition-all duration-700 group-hover/bar:to-blue-400" style={{ height: `${h}%`, minHeight: '4px' }}></div>
+                    </div>
+                    <span className="text-[9px] text-slate-600 font-bold mt-1">{d.day}</span>
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-center text-[10px] text-slate-500 mt-4 font-bold uppercase tracking-widest">Weekly Performance Overview</p>
+            <p className="text-center text-[10px] text-slate-500 mt-4 font-bold uppercase tracking-widest">Weekly Revenue — Live Data</p>
           </div>
         ) : (
           <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-8 rounded-[3rem] min-h-[400px] flex flex-col justify-center items-center text-center shadow-xl relative overflow-hidden">
