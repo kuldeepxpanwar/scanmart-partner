@@ -961,33 +961,73 @@ export default function SalesPage() {
             <table className="w-full my-2">
               <thead><tr className="border-b border-black text-left text-[9px] font-black uppercase"><th className="pb-1">Item</th><th className="text-center">Qty</th><th className="text-right">Rate</th><th className="text-right">Amt</th></tr></thead>
               <tbody>
-                {lastSale.items.map((item: any, idx: number) => (
-                  <tr key={item.id || idx} className="border-b border-dotted border-gray-200">
-                    <td className="py-0.5 pr-1 leading-tight max-w-[120px] truncate">{item.name}</td>
-                    <td className="text-center">{item.quantity}</td>
-                    <td className="text-right">{Number(item.price).toFixed(0)}</td>
-                    <td className="text-right font-bold">{(item.price * item.quantity).toFixed(0)}</td>
-                  </tr>
-                ))}
+                {lastSale.items.map((item: any, idx: number) => {
+                  const gstRate = Number(item.gst_rate || 0);
+                  const lineTotal = Number(item.price) * item.quantity;
+                  const taxableLine = gstRate > 0 ? lineTotal / (1 + gstRate / 100) : lineTotal;
+                  const gstLine = lineTotal - taxableLine;
+                  return (
+                    <tr key={item.id || idx} className="border-b border-dotted border-gray-200">
+                      <td className="py-0.5 pr-1 leading-tight max-w-[120px]">
+                        <div className="truncate">{item.name}</div>
+                        {gstRate > 0 && <div className="text-[8px] text-gray-400">GST {gstRate}% (₹{gstLine.toFixed(2)})</div>}
+                      </td>
+                      <td className="text-center align-top pt-0.5">{item.quantity}</td>
+                      <td className="text-right align-top pt-0.5">{Number(item.price).toFixed(0)}</td>
+                      <td className="text-right font-bold align-top pt-0.5">{lineTotal.toFixed(0)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
-            {/* Totals */}
-            <div className="border-t border-dashed border-gray-400 pt-2 space-y-0.5">
-              {lastSale.totalSavings > 0 && <div className="flex justify-between text-gray-500"><span>Discount:</span><span>-₹{lastSale.totalSavings.toFixed(2)}</span></div>}
-              <div className="flex justify-between text-base font-black border-t border-black pt-1 mt-1">
-                <span>TOTAL</span><span>₹{Math.round(lastSale.total)}</span>
-              </div>
-              {/* Payment method breakdown */}
-              {lastSale.paymentMethod === 'split' ? (
-                <div className="space-y-0.5">
-                  <div className="flex justify-between text-[9px] text-gray-500"><span>💵 Cash:</span><span className="font-bold">₹{Math.round(lastSale.splitCash || 0)}</span></div>
-                  <div className="flex justify-between text-[9px] text-gray-500"><span>📱 UPI:</span><span className="font-bold">₹{Math.round(lastSale.splitUpi || 0)}</span></div>
+            {/* Totals + GST Breakdown */}
+            {(() => {
+              // Compute GST slab breakdown from lastSale.items
+              const slabMap: Record<number, { taxable: number; tax: number }> = {};
+              let totalTaxable = 0;
+              let totalGst = 0;
+              lastSale.items.forEach((item: any) => {
+                const gstRate = Number(item.gst_rate || 0);
+                const lineTotal = Number(item.price) * item.quantity;
+                const taxable = gstRate > 0 ? lineTotal / (1 + gstRate / 100) : lineTotal;
+                const gst = lineTotal - taxable;
+                totalTaxable += taxable;
+                totalGst += gst;
+                if (gstRate > 0) {
+                  if (!slabMap[gstRate]) slabMap[gstRate] = { taxable: 0, tax: 0 };
+                  slabMap[gstRate].taxable += taxable;
+                  slabMap[gstRate].tax += gst;
+                }
+              });
+              const hasGst = totalGst > 0.01;
+              return (
+                <div className="border-t border-dashed border-gray-400 pt-2 space-y-0.5">
+                  {hasGst && (
+                    <div className="flex justify-between text-gray-500"><span>Taxable Amt:</span><span>₹{totalTaxable.toFixed(2)}</span></div>
+                  )}
+                  {hasGst && Object.entries(slabMap).map(([rate, val]) => (
+                    <div key={rate} className="flex justify-between text-gray-500">
+                      <span>GST @{rate}% (CGST {Number(rate) / 2}% + SGST {Number(rate) / 2}%):</span>
+                      <span>₹{val.tax.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {lastSale.totalSavings > 0 && <div className="flex justify-between text-gray-500"><span>Discount:</span><span>-₹{lastSale.totalSavings.toFixed(2)}</span></div>}
+                  <div className="flex justify-between text-base font-black border-t border-black pt-1 mt-1">
+                    <span>TOTAL</span><span>₹{Math.round(lastSale.total)}</span>
+                  </div>
+                  {/* Payment method breakdown */}
+                  {lastSale.paymentMethod === 'split' ? (
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-[9px] text-gray-500"><span>💵 Cash:</span><span className="font-bold">₹{Math.round(lastSale.splitCash || 0)}</span></div>
+                      <div className="flex justify-between text-[9px] text-gray-500"><span>📱 UPI:</span><span className="font-bold">₹{Math.round(lastSale.splitUpi || 0)}</span></div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-[9px] text-gray-500"><span>Payment:</span><span className="uppercase font-bold">{lastSale.paymentMethod}</span></div>
+                  )}
                 </div>
-              ) : (
-                <div className="flex justify-between text-[9px] text-gray-500"><span>Payment:</span><span className="uppercase font-bold">{lastSale.paymentMethod}</span></div>
-              )}
-            </div>
+              );
+            })()}
 
             {/* UPI QR — shown for upi or split (UPI portion only) */}
             {(lastSale.paymentMethod === 'upi' || lastSale.paymentMethod === 'split') && (
