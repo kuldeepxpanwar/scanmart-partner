@@ -119,7 +119,15 @@ export default function StaffPage() {
     if (pin.length < 4) return setPinError("PIN must be 4-6 digits");
     setPinError("");
 
-    // Fetch admin/manager list — can't filter by bcrypt hash in DB
+    // Get auth user → owner's store IDs → scope staff fetch
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    let ownerStoreIds: string[] = [];
+    if (authUser) {
+      const { data: ownedStores } = await supabase
+        .from("stores").select("id").eq("owner_id", authUser.id);
+      ownerStoreIds = (ownedStores || []).map((s: any) => s.id);
+    }
+
     const { data: staffList } = await supabase
       .from("staff")
       .select("*")
@@ -128,8 +136,14 @@ export default function StaffPage() {
 
     let matched: any = null;
     for (const member of staffList || []) {
+      if (!member.pin_code) continue;
       const ok = await verifyPin(pin, member.pin_code);
-      if (ok) { matched = member; break; }
+      if (!ok) continue;
+      // Admin scoped to owner's stores; manager must match active store
+      const isOwnerAdmin = member.role === 'admin' &&
+        (!member.store_id || ownerStoreIds.includes(member.store_id));
+      const isStoreManager = member.role === 'manager' && member.store_id === activeStoreId;
+      if (isOwnerAdmin || isStoreManager) { matched = member; break; }
     }
 
     if (matched) {

@@ -149,27 +149,37 @@ export default function SalesPage() {
     setLoginLoading(true);
 
     try {
-      // Fetch ALL active staff — bcrypt handles auth security
-      // Staff access is then scoped: admin (store_id=null) → any store, others → must match activeStoreId
-      const { data: staffList, error } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("is_active", true);
+      // Step 1: Get auth user to scope staff by owner's stores
+      const { data: { user: authUser } } = await supabase.auth.getUser();
 
+      // Step 2: Get this owner's store IDs (for admin scoping)
+      let ownerStoreIds: string[] = [];
+      if (authUser) {
+        const { data: ownedStores } = await supabase
+          .from("stores").select("id").eq("owner_id", authUser.id);
+        ownerStoreIds = (ownedStores || []).map((s: any) => s.id);
+      }
+
+      // Step 3: Fetch all active staff
+      const { data: staffList, error } = await supabase
+        .from("staff").select("*").eq("is_active", true);
       if (error) throw error;
 
-      // Find matching staff by PIN
+      // Step 4: PIN match + access scope check
+      // - Admin: must belong to one of owner's stores (or null store_id = owner setup)
+      // - Manager/Staff: must match activeStoreId exactly
       let matchedStaff: any = null;
       for (const member of (staffList || [])) {
-        if (member.pin_code && await verifyPin(pin, member.pin_code)) {
-          // Admin/owner (null store_id) can access any store
-          // Regular staff must belong to the active store
-          const isAdmin = member.role === 'admin' && !member.store_id;
-          const belongsToStore = member.store_id === activeStoreId;
-          if (isAdmin || belongsToStore) {
-            matchedStaff = member;
-            break;
-          }
+        if (!member.pin_code) continue;
+        if (!(await verifyPin(pin, member.pin_code))) continue;
+
+        const isOwnerAdmin = member.role === 'admin' &&
+          (!member.store_id || ownerStoreIds.includes(member.store_id));
+        const isStoreStaff = member.store_id === activeStoreId;
+
+        if (isOwnerAdmin || isStoreStaff) {
+          matchedStaff = member;
+          break;
         }
       }
 
