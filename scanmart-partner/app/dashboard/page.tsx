@@ -1,17 +1,12 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import {
-  TrendingUp, Users, Package, ShoppingBag,
-  ArrowUpRight, Zap, Loader2, Calendar, IndianRupee,
-  Wallet, ShieldCheck, Lock
-} from "lucide-react";
+import { ArrowUpRight, Zap, Loader2, Calendar, IndianRupee, Wallet, ShieldCheck, Lock, TrendingUp, Users, Package, ShoppingBag } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import ForgotPinModal from "@/components/ForgotPinModal";
+import { verifyStaffPin } from "@/app/actions/auth";
 
 export default function DashboardHome() {
-  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [isLocked, setIsLocked] = useState(true);
@@ -20,6 +15,7 @@ export default function DashboardHome() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [showForgotPin, setShowForgotPin] = useState(false);
   const [loginShopId, setLoginShopId] = useState<string | null>(null);
+  const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
 
   // 🔒 PIN Lockout State
   const [pinAttempts, setPinAttempts] = useState(0);
@@ -53,7 +49,6 @@ export default function DashboardHome() {
   }, [lockoutUntil]);
 
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [currentStaffId, setCurrentStaffId] = useState<string | null>(null);
   const [staffName, setStaffName] = useState("");
 
   const [stats, setStats] = useState({
@@ -65,7 +60,12 @@ export default function DashboardHome() {
   const [weeklyData, setWeeklyData] = useState<{ day: string; rev: number }[]>([]);
   const [lowStockItems, setLowStockItems] = useState<{ name: string; stock: number }[]>([]);
 
-  useEffect(() => { checkActiveSession(); }, []);
+  useEffect(() => {
+    checkActiveSession();
+    // Load active store
+    const storedId = typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null;
+    if (storedId) setActiveStoreId(storedId);
+  }, []);
 
   // ─── Session restore ────────────────────────────────────────
   const checkActiveSession = async () => {
@@ -83,7 +83,6 @@ export default function DashboardHome() {
 
       if (data) {
         setUserRole(data.role);
-        setCurrentStaffId(data.id);
         setStaffName(data.name || "");
         setIsLocked(false);
         fetchDashboardData(data.role, data.id, data.shop_id);
@@ -115,24 +114,16 @@ export default function DashboardHome() {
       return;
     }
 
-    const currentShopOwnerId = authData.user.id;
-    setLoginShopId(currentShopOwnerId);
+    // Use active store to scope staff lookup
+    const result = await verifyStaffPin(pin, activeStoreId || undefined);
 
-    const { data } = await supabase
-      .from("staff")
-      .select("*")
-      .eq("pin_code", pin)
-      .eq("is_active", true)
-      .eq("shop_id", currentShopOwnerId)
-      .maybeSingle();
-
-    if (data) {
+    if (result.success && result.staff) {
+      const data = result.staff;
       // ✅ Success: reset lockout
       setPinAttempts(0);
       localStorage.removeItem("dash_lockout_until");
       sessionStorage.setItem("active_staff_id", data.id);
       setUserRole(data.role);
-      setCurrentStaffId(data.id);
       setStaffName(data.name || "");
       setIsLocked(false);
       setPin("");
