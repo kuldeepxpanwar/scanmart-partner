@@ -45,7 +45,10 @@ export default function SalesPage() {
   const [name, setName] = useState("");
   const [totalSpent, setTotalSpent] = useState(0);
   const [isExisting, setIsExisting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi" | "card">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi" | "card" | "split">("cash");
+  // Split payment amounts
+  const [splitCash, setSplitCash] = useState(0);
+  const [splitUpi, setSplitUpi] = useState(0);
 
   // --- RECEIPT & QR ---
   const [showReceipt, setShowReceipt] = useState(false);
@@ -342,11 +345,12 @@ export default function SalesPage() {
         total_amount: Number(finalTotal.toFixed(2)),
         customer_id: customerId,
         payment_method: paymentMethod,
+        split_cash: paymentMethod === "split" ? Number(splitCash.toFixed(2)) : null,
+        split_upi: paymentMethod === "split" ? Number(splitUpi.toFixed(2)) : null,
         total_savings: Number(totalSavings.toFixed(2)) || 0,
         staff_id: currentStaff?.id,
         store_id: activeStoreId,
         created_at: new Date().toISOString(),
-        // invoice_number stored UI-only (column needs SQL: ALTER TABLE sales ADD COLUMN IF NOT EXISTS invoice_number TEXT)
       };
 
       // First: try with profit + GST
@@ -398,9 +402,12 @@ export default function SalesPage() {
         totalSavings,
         totalQty: cart.reduce((acc, item) => acc + item.quantity, 0),
         paymentMethod,
+        splitCash: paymentMethod === "split" ? splitCash : undefined,
+        splitUpi: paymentMethod === "split" ? splitUpi : undefined,
         staffName: currentStaff?.name
       });
-      setShowReceipt(true); setCart([]); setPhone(""); setName(""); fetchProducts();
+      setShowReceipt(true); setCart([]); setPhone(""); setName(""); setDiscountValue(0);
+      setSplitCash(0); setSplitUpi(0); fetchProducts();
     } catch (err: any) { alert("Error: " + err.message); } finally { setCheckoutLoading(false); }
   };
 
@@ -794,16 +801,82 @@ export default function SalesPage() {
           </div>
 
           {/* Payment Method */}
-          <div className="px-3 pb-2 grid grid-cols-3 gap-2">
-            {(['cash', 'upi', 'card'] as const).map(m => (
-              <button key={m} onClick={() => setPaymentMethod(m)} className={`py-2.5 rounded-xl text-[10px] font-black border-2 uppercase flex items-center justify-center gap-1 transition-all ${paymentMethod === m ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400'
-                }`}>
-                {m === 'cash' && <Banknote size={13} />}
-                {m === 'upi' && <QrCode size={13} />}
-                {m === 'card' && <CreditCard size={13} />}
-                {m}
-              </button>
-            ))}
+          <div className="px-3 pb-2">
+            <div className="grid grid-cols-4 gap-1.5 mb-2">
+              {(['cash', 'upi', 'card', 'split'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setPaymentMethod(m);
+                    if (m !== 'split') { setSplitCash(0); setSplitUpi(0); }
+                    else { setSplitCash(0); setSplitUpi(finalTotal); }
+                  }}
+                  className={`py-2 rounded-xl text-[9px] font-black border-2 uppercase flex items-center justify-center gap-1 transition-all ${paymentMethod === m
+                    ? m === 'split' ? 'bg-purple-700 border-purple-600 text-white shadow-lg' : 'bg-[#1a237e] border-[#1a237e] text-white shadow-lg'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400'
+                    }`}
+                >
+                  {m === 'cash' && <Banknote size={11} />}
+                  {m === 'upi' && <QrCode size={11} />}
+                  {m === 'card' && <CreditCard size={11} />}
+                  {m === 'split' && <span className="text-[8px]">⚡</span>}
+                  {m === 'split' ? 'Split' : m}
+                </button>
+              ))}
+            </div>
+
+            {/* Split payment inputs */}
+            {paymentMethod === 'split' && (
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5 space-y-2">
+                <p className="text-[9px] font-black text-purple-600 uppercase tracking-widest">Split: Cash + UPI = ₹{finalTotal.toFixed(0)}</p>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <p className="text-[8px] text-gray-500 font-bold uppercase mb-0.5">💵 Cash</p>
+                    <input
+                      type="number"
+                      min={0}
+                      max={finalTotal}
+                      value={splitCash || ''}
+                      onChange={e => {
+                        const v = Math.min(Number(e.target.value) || 0, finalTotal);
+                        setSplitCash(v);
+                        setSplitUpi(parseFloat((finalTotal - v).toFixed(2)));
+                      }}
+                      placeholder="0"
+                      className="w-full border-2 border-purple-300 rounded-lg px-2 py-1.5 text-sm font-black text-center focus:border-purple-600 outline-none bg-white"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[8px] text-gray-500 font-bold uppercase mb-0.5">📱 UPI</p>
+                    <input
+                      type="number"
+                      min={0}
+                      max={finalTotal}
+                      value={splitUpi || ''}
+                      onChange={e => {
+                        const v = Math.min(Number(e.target.value) || 0, finalTotal);
+                        setSplitUpi(v);
+                        setSplitCash(parseFloat((finalTotal - v).toFixed(2)));
+                      }}
+                      placeholder={String(finalTotal.toFixed(0))}
+                      className="w-full border-2 border-purple-300 rounded-lg px-2 py-1.5 text-sm font-black text-center focus:border-purple-600 outline-none bg-white"
+                    />
+                  </div>
+                </div>
+                {/* Balance indicator */}
+                {(() => {
+                  const diff = parseFloat((splitCash + splitUpi - finalTotal).toFixed(2));
+                  return diff !== 0 && (
+                    <p className={`text-[9px] font-black text-center ${diff > 0 ? 'text-red-500' : 'text-orange-500'}`}>
+                      {diff > 0 ? `⚠ Over by ₹${diff}` : `⚠ Short by ₹${Math.abs(diff)}`}
+                    </p>
+                  );
+                })()}
+                {splitCash > 0 && splitUpi > 0 && parseFloat((splitCash + splitUpi - finalTotal).toFixed(2)) === 0 && (
+                  <p className="text-[9px] font-black text-green-600 text-center">✅ Amounts match!</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -824,11 +897,17 @@ export default function SalesPage() {
           {/* CHECKOUT BUTTON */}
           <div className="px-3 pb-4 mt-auto">
             <button
-              onClick={handleCheckout}
+              onClick={() => {
+                if (paymentMethod === 'split') {
+                  const diff = parseFloat((splitCash + splitUpi - finalTotal).toFixed(2));
+                  if (diff !== 0) return alert(`⚠️ Split amounts don't add up! Difference: ₹${Math.abs(diff)}`);
+                }
+                handleCheckout();
+              }}
               disabled={checkoutLoading || cart.length === 0}
               className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-black uppercase text-base tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
             >
-              {checkoutLoading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} /> Pay & Print</>}
+              {checkoutLoading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} /> Pay &amp; Print</>}
               {!isOnline && <span className="text-[9px] bg-yellow-400 text-black px-1 rounded font-black">OFFLINE</span>}
             </button>
           </div>
@@ -899,19 +978,29 @@ export default function SalesPage() {
               <div className="flex justify-between text-base font-black border-t border-black pt-1 mt-1">
                 <span>TOTAL</span><span>₹{Math.round(lastSale.total)}</span>
               </div>
-              <div className="flex justify-between text-[9px] text-gray-500"><span>Payment:</span><span className="uppercase font-bold">{lastSale.paymentMethod}</span></div>
+              {/* Payment method breakdown */}
+              {lastSale.paymentMethod === 'split' ? (
+                <div className="space-y-0.5">
+                  <div className="flex justify-between text-[9px] text-gray-500"><span>💵 Cash:</span><span className="font-bold">₹{Math.round(lastSale.splitCash || 0)}</span></div>
+                  <div className="flex justify-between text-[9px] text-gray-500"><span>📱 UPI:</span><span className="font-bold">₹{Math.round(lastSale.splitUpi || 0)}</span></div>
+                </div>
+              ) : (
+                <div className="flex justify-between text-[9px] text-gray-500"><span>Payment:</span><span className="uppercase font-bold">{lastSale.paymentMethod}</span></div>
+              )}
             </div>
 
-            {/* UPI QR */}
-            {lastSale.paymentMethod === 'upi' && (
+            {/* UPI QR — shown for upi or split (UPI portion only) */}
+            {(lastSale.paymentMethod === 'upi' || lastSale.paymentMethod === 'split') && (
               <div className="mt-3 p-2 bg-gray-100 rounded text-center border border-dashed border-gray-300">
                 <div className="flex justify-center bg-white p-1.5 w-fit mx-auto rounded">
                   <QRCodeAny
-                    value={`upi://pay?pa=${storeSettings.upi_id || 'yourupi@bank'}&pn=${storeSettings.shop_name}&am=${lastSale.total}&cu=INR&tr=${qrRef}`}
+                    value={`upi://pay?pa=${storeSettings.upi_id || 'yourupi@bank'}&pn=${storeSettings.shop_name}&am=${lastSale.paymentMethod === 'split' ? (lastSale.splitUpi || 0) : lastSale.total}&cu=INR&tr=${qrRef}`}
                     size={88}
                   />
                 </div>
-                <p className="text-[8px] mt-1 font-bold uppercase">Scan to Pay • {timeLeft}s</p>
+                <p className="text-[8px] mt-1 font-bold uppercase">
+                  {lastSale.paymentMethod === 'split' ? `UPI Pay ₹${Math.round(lastSale.splitUpi || 0)}` : 'Scan to Pay'} • {timeLeft}s
+                </p>
                 <p className="text-[8px] text-gray-500">{storeSettings.upi_id}</p>
               </div>
             )}
