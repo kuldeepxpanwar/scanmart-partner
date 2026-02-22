@@ -250,24 +250,38 @@ export default function DashboardHome() {
         cashInHand: myCash,
       });
 
-      // ── Weekly chart data (real) ─────────────────────────────
-      const weekDays: { day: string; rev: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        d.setHours(0, 0, 0, 0);
-        const dEnd = new Date(d);
-        dEnd.setHours(23, 59, 59, 999);
-        const { data: dayData } = await supabase
-          .from("sales")
-          .select("total_amount")
-          .eq("store_id", storeId)
-          .gte("created_at", d.toISOString())
-          .lte("created_at", dEnd.toISOString());
-        const rev = (dayData || []).reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
-        weekDays.push({ day: d.toLocaleDateString("en-IN", { weekday: "short" }), rev });
+      // ── Weekly chart data — single RPC call ──────────────────
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("get_weekly_revenue", {
+        p_store_id: storeId,
+      });
+
+      if (!rpcErr && rpcData) {
+        // RPC returns: [{ sale_day: "2024-02-20", revenue: 12500 }, ...]
+        const weekDays = rpcData.map((row: { sale_day: string; revenue: number }) => ({
+          day: new Date(row.sale_day).toLocaleDateString("en-IN", { weekday: "short" }),
+          rev: Number(row.revenue || 0),
+        }));
+        setWeeklyData(weekDays);
+      } else {
+        // Fallback: 7 individual queries (until RPC is created in Supabase)
+        const weekDays: { day: string; rev: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          d.setHours(0, 0, 0, 0);
+          const dEnd = new Date(d);
+          dEnd.setHours(23, 59, 59, 999);
+          const { data: dayData } = await supabase
+            .from("sales")
+            .select("total_amount")
+            .eq("store_id", storeId)
+            .gte("created_at", d.toISOString())
+            .lte("created_at", dEnd.toISOString());
+          const rev = (dayData || []).reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
+          weekDays.push({ day: d.toLocaleDateString("en-IN", { weekday: "short" }), rev });
+        }
+        setWeeklyData(weekDays);
       }
-      setWeeklyData(weekDays);
 
       // ── Low stock names ──────────────────────────────────────
       const { data: lowItems } = await supabase
