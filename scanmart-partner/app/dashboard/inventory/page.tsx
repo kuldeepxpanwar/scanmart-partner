@@ -27,6 +27,9 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import Paginator from "@/components/Paginator";
+
+const INV_PAGE_SIZE = 20;
 
 // --- Types ---
 interface InventoryItem {
@@ -148,6 +151,7 @@ export default function InventoryPage() {
 
   // --- Filter/Sort States ---
   const [filterType, setFilterType] = useState<"all" | "top_selling" | "most_profitable" | "dead_stock" | "low_stock">("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // --- 🔄 INITIALIZATION ---
   useEffect(() => {
@@ -171,6 +175,9 @@ export default function InventoryPage() {
       fetchStoresList();
     }
   }, [activeStoreId, showArchived]);
+
+  // Reset page on search or filter change
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterType, showArchived]);
 
   const fetchStoresFirst = async () => {
     const { data } = await supabase.from("stores").select("*").limit(1);
@@ -500,6 +507,11 @@ export default function InventoryPage() {
 
   const filteredProducts = getProcessedProducts();
   const totalStockValue = filteredProducts.reduce((sum, item) => sum + (item.stock * item.buying_price), 0);
+  // Paginated slice
+  const pagedProducts = filteredProducts.slice(
+    (currentPage - 1) * INV_PAGE_SIZE,
+    currentPage * INV_PAGE_SIZE
+  );
 
   const getAgingStatus = (lastSoldDate: string | null) => {
     if (!lastSoldDate) return { label: "New", color: "text-blue-400" };
@@ -669,7 +681,7 @@ export default function InventoryPage() {
                   </div>
                 </td></tr>
               ) : (
-                filteredProducts.map((item) => {
+                pagedProducts.map((item) => {
                   const aging = getAgingStatus(item.last_sold_at);
                   const margin = item.price - item.buying_price;
 
@@ -718,6 +730,15 @@ export default function InventoryPage() {
               )}
             </tbody>
           </table>
+        </div>
+        {/* Paginator */}
+        <div className="px-6 py-4 border-t border-slate-800">
+          <Paginator
+            currentPage={currentPage}
+            totalItems={filteredProducts.length}
+            pageSize={INV_PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
         </div>
       </div>
 

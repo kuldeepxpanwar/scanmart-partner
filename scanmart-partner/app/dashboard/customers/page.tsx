@@ -10,6 +10,9 @@ import {
   Loader2, Phone, Megaphone, Gift, Share2, ArrowUpRight,
   ShoppingBag, Download, TrendingUp, TrendingDown, FileText, FileSpreadsheet
 } from "lucide-react";
+import Paginator from "@/components/Paginator";
+
+const CUST_PAGE_SIZE = 12;
 
 // 📝 Marketing Templates
 const OFFER_TEMPLATES = [
@@ -46,6 +49,8 @@ export default function CustomersPage() {
   const [selectedForPromo, setSelectedForPromo] = useState<any[]>([]);
   // 🔥 BUG FIX 7: Track which template is selected
   const [selectedTemplate, setSelectedTemplate] = useState(OFFER_TEMPLATES[0]);
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   // --- 🔄 INITIALIZATION ---
   useEffect(() => {
@@ -64,6 +69,9 @@ export default function CustomersPage() {
       fetchCustomers();
     }
   }, [activeStoreId]);
+
+  // Reset page on search or VIP filter change
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, showVIPOnly, vipCount]);
 
   const fetchStoresFirst = async () => {
     const { data } = await supabase.from("stores").select("id").limit(1);
@@ -230,6 +238,12 @@ export default function CustomersPage() {
     filteredCustomers = filteredCustomers.slice(0, vipCount);
   }
 
+  // Paginate
+  const pagedCustomers = filteredCustomers.slice(
+    (currentPage - 1) * CUST_PAGE_SIZE,
+    currentPage * CUST_PAGE_SIZE
+  );
+
   const formatCurrency = (amount: any) => Number(amount || 0).toFixed(2);
 
   return (
@@ -326,7 +340,7 @@ export default function CustomersPage() {
             )}
           </div>
         ) : (
-          filteredCustomers.map((c, index) => (
+          pagedCustomers.map((c, index) => (
             <div key={c.id} className={`relative p-5 rounded-[2rem] border transition-all flex flex-col justify-between group overflow-hidden ${index < 3 && showVIPOnly ? 'bg-amber-900/10 border-amber-500/30' : 'bg-slate-900/40 border-slate-800 hover:border-blue-500/30'}`}>
 
               {index < 10 && showVIPOnly && (
@@ -371,6 +385,15 @@ export default function CustomersPage() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      <Paginator
+        currentPage={currentPage}
+        totalItems={filteredCustomers.length}
+        pageSize={CUST_PAGE_SIZE}
+        onPageChange={setCurrentPage}
+        className="px-2"
+      />
 
       {/* 📥 EXPORT MODAL */}
       <AnimatePresence>
