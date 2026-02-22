@@ -106,11 +106,9 @@ export default function DashboardHome() {
 
     try {
       // Client-side fetch — browser session satisfies RLS on staff table
-      const { data: staffList, error } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("is_active", true)
-        .eq("store_id", activeStoreId);
+      let staffQuery = supabase.from("staff").select("*").eq("is_active", true);
+      if (activeStoreId) staffQuery = staffQuery.eq("store_id", activeStoreId);
+      const { data: staffList, error } = await staffQuery;
 
       if (error) throw error;
 
@@ -361,7 +359,7 @@ export default function DashboardHome() {
             Forgot PIN?
           </button>
         </div>
-        <ForgotPinModal isOpen={showForgotPin} onClose={() => setShowForgotPin(false)} shopId={loginShopId} />
+        <ForgotPinModal isOpen={showForgotPin} onClose={() => setShowForgotPin(false)} shopId={activeStoreId} />
       </div>
     );
   }

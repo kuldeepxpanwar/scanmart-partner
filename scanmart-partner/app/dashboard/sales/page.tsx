@@ -149,12 +149,10 @@ export default function SalesPage() {
     setLoginLoading(true);
 
     try {
-      // Fetch active staff for this store client-side (browser session satisfies RLS)
-      const { data: staffList, error } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("is_active", true)
-        .eq("store_id", activeStoreId);
+      // Fetch active staff — skip store filter if activeStoreId not yet loaded
+      let staffQuery = supabase.from("staff").select("*").eq("is_active", true);
+      if (activeStoreId) staffQuery = staffQuery.eq("store_id", activeStoreId);
+      const { data: staffList, error } = await staffQuery;
 
       if (error) throw error;
 
