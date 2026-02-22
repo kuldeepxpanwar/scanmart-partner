@@ -603,7 +603,7 @@ export default function SalesPage() {
         <div className="ml-auto flex items-center gap-3">
           <span className="text-red-200">{new Date().toLocaleDateString('en-IN')} {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
           <span className={`font-black px-2 py-0.5 rounded text-[10px] ${isOnline ? 'bg-green-600 text-white' : 'bg-yellow-400 text-black'}`}>
-            {syncing ? '↻ Syncing...' : isOnline ? '● ONLINE' : `● OFFLINE${offlineQueue.length > 0 ? ` (${offlineQueue.length} queued)` : ''}`}
+            {syncing ? '↻ Syncing...' : isOnline ? '● ONLINE' : `● OFFLINE${offlineQueueCount > 0 ? ` (${offlineQueueCount} queued)` : ''}`}
           </span>
           <button onClick={handleLogout} className="bg-red-800 hover:bg-red-900 px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
             <LogOut size={10} /> Exit
@@ -953,8 +953,8 @@ export default function SalesPage() {
               <div className="flex justify-between"><span>Invoice:</span><span className="font-bold">{lastSale.invoiceNumber || lastSale.id?.slice(0, 8)}</span></div>
               <div className="flex justify-between"><span>Date:</span><span>{lastSale.date}</span></div>
               <div className="flex justify-between"><span>Cashier:</span><span>{lastSale.staffName}</span></div>
-              {lastSale.customerName && <div className="flex justify-between"><span>Customer:</span><span>{lastSale.customerName}</span></div>}
-              {lastSale.customerPhone && <div className="flex justify-between"><span>Phone:</span><span>{lastSale.customerPhone}</span></div>}
+              {lastSale.customer?.name && <div className="flex justify-between"><span>Customer:</span><span>{lastSale.customer.name}</span></div>}
+              {lastSale.customer?.phone && lastSale.customer.phone !== 'N/A' && <div className="flex justify-between"><span>Phone:</span><span>{lastSale.customer.phone}</span></div>}
             </div>
 
             {/* Items */}

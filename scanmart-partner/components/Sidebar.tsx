@@ -43,13 +43,23 @@ export default function Sidebar() {
       const storedStaffId = typeof window !== 'undefined' ? sessionStorage.getItem("active_staff_id") : null;
 
       if (storedStaffId) {
+        // ✅ Check sessionStorage cache first — avoid DB call on every page nav
+        const cachedRole = sessionStorage.getItem("active_staff_role");
+        if (cachedRole) {
+          setUserRole(cachedRole);
+          return;
+        }
+        // Cache miss — fetch from DB once
         const { data } = await supabase
           .from("staff")
           .select("role")
           .eq("id", storedStaffId)
           .single();
 
-        if (data) setUserRole(data.role);
+        if (data) {
+          setUserRole(data.role);
+          sessionStorage.setItem("active_staff_role", data.role);
+        }
       } else {
         setUserRole("staff");
       }
@@ -57,10 +67,11 @@ export default function Sidebar() {
     checkRole();
   }, [pathname]);
 
-  // 🔄 Switch User Function
+  // 🔄 Switch User Function — also clears cached role
   const handleSwitchUser = () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem("active_staff_id");
+      sessionStorage.removeItem("active_staff_role");
       window.location.reload();
     }
   };

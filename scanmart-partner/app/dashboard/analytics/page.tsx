@@ -63,7 +63,17 @@ export default function AnalyticsPage() {
     setLoading(true);
     try {
       const dateLimit = new Date();
-      if (filter === "today") dateLimit.setHours(0, 0, 0, 0);
+      // ── IST timezone fix: midnight in UTC+5:30 ────────────────
+      if (filter === "today") {
+        // IST = UTC + 5h30m. Compute today's midnight in IST, convert to UTC.
+        const now = new Date();
+        const istOffsetMs = 5.5 * 60 * 60 * 1000;
+        const istNow = new Date(now.getTime() + istOffsetMs);
+        // Midnight in IST
+        istNow.setUTCHours(0, 0, 0, 0);
+        // Convert back to UTC for Supabase query
+        dateLimit.setTime(istNow.getTime() - istOffsetMs);
+      }
       if (filter === "week") dateLimit.setDate(dateLimit.getDate() - 7);
       if (filter === "month") dateLimit.setMonth(dateLimit.getMonth() - 1);
       if (filter === "quarter") dateLimit.setMonth(dateLimit.getMonth() - 3);
@@ -94,10 +104,18 @@ export default function AnalyticsPage() {
       const saleIds = salesData.map((s: any) => s.id);
       let topProdsMap: Record<string, { name: string; qty: number; revenue: number }> = {};
       if (saleIds.length > 0) {
-        const { data: saleItems } = await supabase
-          .from("sale_items")
-          .select("product_id, quantity, price_at_sale, inventory:product_id(name, category)")
-          .in("sale_id", saleIds.slice(0, 500));
+        // Fetch sale_items in batches of 500 to bypass Supabase IN clause limit
+        let allSaleItems: any[] = [];
+        const batchSize = 500;
+        for (let i = 0; i < saleIds.length; i += batchSize) {
+          const batch = saleIds.slice(i, i + batchSize);
+          const { data: batchItems } = await supabase
+            .from("sale_items")
+            .select("product_id, quantity, price_at_sale, inventory:product_id(name, category)")
+            .in("sale_id", batch);
+          allSaleItems = allSaleItems.concat(batchItems || []);
+        }
+        const saleItems = allSaleItems;
 
         (saleItems || []).forEach((item: any) => {
           const name = item.inventory?.name || "Unknown";

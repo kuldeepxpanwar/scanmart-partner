@@ -87,7 +87,7 @@ export default function ReturnsPage() {
         setFoundSales([]);
 
         try {
-            let query = supabase
+            const baseQuery = () => supabase
                 .from("sales")
                 .select(`
           id, created_at, total_amount, payment_method,
@@ -99,7 +99,9 @@ export default function ReturnsPage() {
         `)
                 .eq("store_id", activeStoreId)
                 .order("created_at", { ascending: false })
-                .limit(5);
+                .limit(10);
+
+            let salesData: any[] = [];
 
             if (searchMode === "phone") {
                 // Search by customer phone
@@ -111,21 +113,55 @@ export default function ReturnsPage() {
                     .maybeSingle();
 
                 if (!customerData) {
-                    setSearchError("No customer found with this phone number.");
+                    setSearchError("No customer found with this phone number. Guest checkouts can't be searched by phone.");
                     setSearching(false);
                     return;
                 }
-                query = query.eq("customer_id", customerData.id);
+                const { data, error } = await baseQuery().eq("customer_id", customerData.id);
+                if (error) throw error;
+                salesData = data || [];
+            } else {
+                // Invoice search: match by sale ID prefix (invoice number not stored in DB)
+                // Support: full UUID, first 8 chars, or "INV-..." prefix (strip prefix for ID match)
+                const raw = searchQuery.trim();
+                const idHint = raw.replace(/^INV-\d{8}-/i, "").toLowerCase();
+
+                // Fetch recent sales and filter client-side by ID prefix
+                const { data: recentSales, error } = await supabase
+                    .from("sales")
+                    .select(`
+                      id, created_at, total_amount, payment_method,
+                      customers:customer_id ( name, phone ),
+                      sale_items (
+                        id, quantity, price_at_sale, product_id,
+                        inventory:product_id ( name, id )
+                      )
+                    `)
+                    .eq("store_id", activeStoreId)
+                    .order("created_at", { ascending: false })
+                    .limit(200);
+
+                if (error) throw error;
+
+                // Try exact ID match first, then prefix match
+                salesData = (recentSales || []).filter((s: any) =>
+                    s.id === raw ||
+                    s.id.startsWith(idHint) ||
+                    s.id.replace(/-/g, "").startsWith(idHint.replace(/-/g, ""))
+                );
+
+                if (salesData.length === 0) {
+                    setSearchError(`No sale found matching "${raw}". Try searching by the first 8 characters of the Sale ID shown on the receipt.`);
+                    setSearching(false);
+                    return;
+                }
             }
 
-            const { data, error } = await query;
-            if (error) throw error;
-
-            if (!data || data.length === 0) {
+            if (!salesData || salesData.length === 0) {
                 setSearchError("No sales found for this search.");
             } else {
                 // Add returnQty = 0 by default to each sale item
-                const processed = (data as any[]).map((sale) => ({
+                const processed = (salesData as any[]).map((sale) => ({
                     ...sale,
                     sale_items: sale.sale_items.map((item: any) => ({
                         ...item,
