@@ -82,7 +82,7 @@ export default function Sidebar() {
   const allNavItems = [
     { label: "Overview", icon: <LayoutDashboard size={20} />, href: "/dashboard", roles: ["admin", "manager", "staff"] },
     { label: "Billing (Sales)", icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
-    { label: "Returns & Refunds", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager"] },
+    { label: "Returns & Refunds", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager", "staff"] },
     { label: "Inventory", icon: <Package size={20} />, href: "/dashboard/inventory", roles: ["admin", "manager"] },
     { label: "Suppliers", icon: <Truck size={20} />, href: "/dashboard/suppliers", roles: ["admin", "manager"] },
     { label: "Analytics", icon: <BarChart3 size={20} />, href: "/dashboard/analytics", roles: ["admin", "manager"] },

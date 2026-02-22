@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
     RotateCcw, Search, Phone, Receipt, Package,
-    CheckCircle, XCircle, Loader2, AlertTriangle,
+    CheckCircle, XCircle, Loader2,
     Minus, Plus, BadgePercent, ArrowLeft, Store
 } from "lucide-react";
 
@@ -247,24 +247,6 @@ export default function ReturnsPage() {
                 </div>
             </div>
 
-            {/* ─── SQL NOTICE ─── */}
-            <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
-                <AlertTriangle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                <div>
-                    <p className="text-amber-400 font-bold text-sm">One-time Supabase SQL setup required</p>
-                    <code className="text-[11px] text-amber-300 bg-slate-900 px-3 py-2 rounded-lg block mt-2 font-mono leading-relaxed">
-                        {`CREATE TABLE IF NOT EXISTS returns (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  original_sale_id UUID REFERENCES sales(id),
-  store_id UUID,
-  return_items JSONB,
-  total_refund FLOAT DEFAULT 0,
-  reason TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);`}
-                    </code>
-                </div>
-            </div>
 
             {/* ─── STEP 1: SEARCH ─── */}
             {step === "search" && (
