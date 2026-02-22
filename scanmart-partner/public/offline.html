@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScanMart — Offline</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #020617;
+      color: white;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      padding: 2rem;
+    }
+    .card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 2rem;
+      padding: 3rem 2rem;
+      max-width: 380px;
+      width: 100%;
+    }
+    .icon { font-size: 4rem; margin-bottom: 1.5rem; }
+    h1 { font-size: 1.8rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    p { color: #64748b; font-size: 0.875rem; line-height: 1.6; margin-bottom: 1.5rem; }
+    .badge {
+      display: inline-block;
+      background: #f59e0b20;
+      color: #f59e0b;
+      border: 1px solid #f59e0b40;
+      padding: 0.4rem 1rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 2rem;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      background: #2563eb;
+      color: white;
+      padding: 0.875rem;
+      border-radius: 0.75rem;
+      font-weight: 900;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { background: #3b82f6; }
+    .tip { font-size: 0.7rem; color: #334155; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <div class="badge">● Offline</div>
+    <h1>No Internet</h1>
+    <p>You're offline. The Sales terminal still works — your bills are saved locally and will sync automatically when you're back online.</p>
+    <a href="/dashboard/sales" class="btn">→ Go to POS Terminal</a>
+    <p class="tip">ScanMart saves all offline bills automatically. Nothing is lost.</p>
+  </div>
+</body>
+</html>

@@ -11,6 +11,7 @@ import {
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ForgotPinModal from "@/components/ForgotPinModal";
 import { verifyPin } from "@/lib/pin";
+import { idbAddSale, idbGetQueue, idbRemoveSale, idbQueueCount } from "@/lib/offlineDb";
 
 export default function SalesPage() {
   const QRCodeAny = QRCode as any;
@@ -473,18 +474,18 @@ export default function SalesPage() {
   // --- 🔴 OFFLINE MODE ---
   const [isOnline, setIsOnline] = useState(true);
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
+  const [offlineQueueCount, setOfflineQueueCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [numpadTarget, setNumpadTarget] = useState<'mobile' | 'discount' | null>(null);
 
-  // Listen for online/offline
+  // Listen for online/offline + load IDB queue count
   useEffect(() => {
     const handleOnline = () => { setIsOnline(true); syncOfflineQueue(); };
     const handleOffline = () => setIsOnline(false);
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine);
-      // Load queued sales from storage
-      const stored = localStorage.getItem('scanmart_offline_queue');
-      if (stored) setOfflineQueue(JSON.parse(stored));
+      // Load queued count from IndexedDB
+      idbQueueCount().then(setOfflineQueueCount).catch(() => { });
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
     }
@@ -494,14 +495,12 @@ export default function SalesPage() {
     };
   }, []);
 
-  // Sync queued offline sales when back online
+  // Sync queued offline sales when back online (IndexedDB)
   const syncOfflineQueue = async () => {
-    const stored = localStorage.getItem('scanmart_offline_queue');
-    if (!stored) return;
-    const queue: any[] = JSON.parse(stored);
+    const queue = await idbGetQueue().catch(() => []);
     if (queue.length === 0) return;
     setSyncing(true);
-    const successful: string[] = [];
+    let synced = 0;
     for (const sale of queue) {
       try {
         const { data: saleData, error } = await supabase.from('sales').insert([sale.saleRecord]).select('id').single();
@@ -511,15 +510,15 @@ export default function SalesPage() {
           for (const item of sale.stockUpdates) {
             await supabase.from('inventory').update({ stock: item.newStock, last_sold_at: new Date().toISOString() }).eq('id', item.id);
           }
-          successful.push(sale.id);
+          await idbRemoveSale(sale.id);
+          synced++;
         }
-      } catch (e) { /* skip failed */ }
+      } catch (_) { /* skip failed, retry next time */ }
     }
-    const remaining = queue.filter((s: any) => !successful.includes(s.id));
-    localStorage.setItem('scanmart_offline_queue', JSON.stringify(remaining));
-    setOfflineQueue(remaining);
+    const remaining = await idbQueueCount().catch(() => 0);
+    setOfflineQueueCount(remaining);
     setSyncing(false);
-    if (successful.length > 0) alert(`✅ Synced ${successful.length} offline sale(s)!`);
+    if (synced > 0) alert(`✅ Synced ${synced} offline bill(s) to cloud!`);
   };
 
   // 🔢 On-screen numpad handler
@@ -530,8 +529,8 @@ export default function SalesPage() {
       else if (phone.length < 10) handlePhoneSearch(phone + val);
     } else if (numpadTarget === 'discount') {
       if (val === 'C') setDiscountValue(0);
-      else if (val === '<') setDiscountValue(prev => Math.floor(prev / 10));
-      else setDiscountValue(prev => Number(String(prev) + val) || 0);
+      else if (val === '<') setDiscountValue((prev: number) => Math.floor(prev / 10));
+      else setDiscountValue((prev: number) => Number(String(prev) + val) || 0);
     }
   };
 
@@ -546,8 +545,9 @@ export default function SalesPage() {
           <div className="flex items-center justify-center gap-2 mb-1">
             <div className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">ScanMart</div>
             <div className="text-slate-500 text-[10px] font-bold">POS Terminal</div>
-            <div className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded-full ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-              {isOnline ? '● ONLINE' : '● OFFLINE'}
+            <div className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+              {isOnline ? '● ONLINE' : `● OFFLINE${offlineQueueCount > 0 ? ` · ${offlineQueueCount} queued` : ''}`}
+              {syncing && <span className="text-yellow-400 animate-pulse">⟳ syncing</span>}
             </div>
           </div>
 

@@ -44,6 +44,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => { supabase.removeChannel(subscription); };
   }, []);
 
+  // — Register Service Worker ————————————————————————————————
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        })
+        .catch(() => { /* SW registration failed silently */ });
+    }
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-[#020617]">
       {/* 🛡️ Sidebar Restore: Iski wajah se navigation aur layout alignment fix hogi */}
