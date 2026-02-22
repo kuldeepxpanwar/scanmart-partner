@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ForgotPinModal from "@/components/ForgotPinModal";
+import { verifyPin } from "@/lib/pin";
 
 export default function SalesPage() {
   const QRCodeAny = QRCode as any;
@@ -152,23 +153,29 @@ export default function SalesPage() {
     }
   };
 
-  // --- 🔥 BUG FIX 2: Staff Login with lockout ---
+  // --- 🔐 Staff Login with PIN lockout + bcrypt verify ---
   const handleStaffLogin = async () => {
-    // Lockout check
     if (lockoutUntil && Date.now() < lockoutUntil) {
       return alert(`🔒 Too many failed attempts. Wait ${lockoutCountdown}s`);
     }
     if (pin.length < 4 || pin.length > 6) return alert("PIN must be 4–6 digits");
     setLoginLoading(true);
 
-    const { data: { user: ownerUser } } = await supabase.auth.getUser();
+    // Fetch active staff for this store (can't filter by bcrypt hash in DB)
+    const { data: staffList } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("store_id", activeStoreId)
+      .eq("is_active", true);
 
-    let query = supabase.from("staff").select("*").eq("pin_code", pin).eq("is_active", true);
-    if (ownerUser) query = query.eq("shop_id", ownerUser.id);
+    // Verify PIN against each staff member's hash
+    let matched: any = null;
+    for (const member of staffList || []) {
+      const ok = await verifyPin(pin, member.pin_code);
+      if (ok) { matched = member; break; }
+    }
 
-    const { data } = await query.maybeSingle();
-
-    if (!data) {
+    if (!matched) {
       const newAttempts = pinAttempts + 1;
       setPinAttempts(newAttempts);
       const remaining = PIN_MAX_ATTEMPTS - newAttempts;
@@ -182,14 +189,11 @@ export default function SalesPage() {
       }
       setPin("");
     } else {
-      // Success
       setPinAttempts(0);
       localStorage.removeItem("pos_lockout_until");
-      if (data.role !== 'admin' && data.store_id && data.store_id !== activeStoreId) {
-        alert("❌ Access Denied: You belong to a different store."); setPin("");
-      } else {
-        setCurrentStaff(data); setPin("");
-      }
+      setCurrentStaff(matched);
+      setPin("");
+      sessionStorage.setItem("active_staff_id", matched.id);
     }
     setLoginLoading(false);
   };

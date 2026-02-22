@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { hashPin, verifyPin } from "@/lib/pin";
 import {
   Users, Plus, Trash2, Key, Phone,
   Loader2, UserCheck, X, Lock, Crown, ShieldAlert, Store
@@ -113,23 +114,28 @@ export default function StaffPage() {
     setLoading(false);
   };
 
-  // --- 🔓 UNLOCK FUNCTION (Admin + Manager) ---
+  // --- 🔓 UNLOCK FUNCTION (Admin + Manager) with bcrypt verify ---
   const handleUnlock = async () => {
     if (pin.length < 4) return setPinError("PIN must be 4-6 digits");
     setPinError("");
 
-    const { data } = await supabase
+    // Fetch admin/manager list — can't filter by bcrypt hash in DB
+    const { data: staffList } = await supabase
       .from("staff")
       .select("*")
       .in("role", ["admin", "manager"])
-      .eq("pin_code", pin)
-      .eq("is_active", true)
-      .maybeSingle();
+      .eq("is_active", true);
 
-    if (data) {
+    let matched: any = null;
+    for (const member of staffList || []) {
+      const ok = await verifyPin(pin, member.pin_code);
+      if (ok) { matched = member; break; }
+    }
+
+    if (matched) {
       setIsLocked(false);
-      setCurrentUserRole(data.role);
-      setStaffShopId(data.shop_id || null);
+      setCurrentUserRole(matched.role);
+      setStaffShopId(matched.shop_id || null);
       fetchStaff();
     } else {
       setPinError("❌ Access Denied: Invalid Admin/Manager PIN");
@@ -145,11 +151,12 @@ export default function StaffPage() {
 
     // Owner gets assigned to the first available store or creates one implicitly
     // Ideally, store creation happens next, so we leave store_id null initially or trigger DB trigger
+    const hashedPin = await hashPin(ownerDetails.pin_code);
     const { error } = await supabase.from("staff").insert([{
       name: ownerDetails.name,
       phone: ownerDetails.phone,
       role: "admin",
-      pin_code: ownerDetails.pin_code,
+      pin_code: hashedPin,
       is_active: true
     }]);
 
@@ -190,12 +197,13 @@ export default function StaffPage() {
       return alert("❌ Permission Denied: Managers can only create Staff accounts.");
     }
 
+    const hashedPin = await hashPin(newStaff.pin_code);
     const { error } = await supabase.from("staff").insert([{
       name: newStaff.name,
       phone: newStaff.phone,
       role: newStaff.role,
-      pin_code: newStaff.pin_code,
-      store_id: activeStoreId, // 🔥 Linking new staff to Active Store
+      pin_code: hashedPin,
+      store_id: activeStoreId,
       is_active: true
     }]);
 

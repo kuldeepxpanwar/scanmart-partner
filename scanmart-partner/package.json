@@ -11,7 +11,9 @@
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
+    "@types/bcryptjs": "^2.4.6",
     "autoprefixer": "^10.4.24",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.0",
     "html5-qrcode": "^2.3.8",
