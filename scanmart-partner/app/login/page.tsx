@@ -162,7 +162,7 @@ export default function LoginPage() {
             <Zap size={40} className="text-white fill-white" />
           </motion.div>
           <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-lg">
-            ScanMart<span className="text-blue-500">.Dash</span>
+            Scan<span className="text-blue-500">Mart</span>
           </h1>
           <p className="text-slate-400 text-sm mt-3 font-medium tracking-wide uppercase">
             {showForgotPassword ? "Password Recovery" : isSignUp ? "Create Your Shop" : "Next-Gen Business OS"}

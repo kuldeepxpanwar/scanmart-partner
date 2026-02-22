@@ -58,6 +58,42 @@ export default function SalesPage() {
   const [heldBills, setHeldBills] = useState<any[]>([]);
   const [showHeldBills, setShowHeldBills] = useState(false);
 
+  // --- 🧾 INVOICE NUMBERING ---
+  const generateInvoiceNumber = () => {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const seq = String(Math.floor(Math.random() * 900000) + 100000);
+    return `INV-${y}${m}${d}-${seq}`;
+  };
+
+  // --- 🔒 PIN LOCKOUT ---
+  const [pinAttempts, setPinAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutCountdown, setLockoutCountdown] = useState(0);
+  const PIN_MAX_ATTEMPTS = 5;
+  const LOCKOUT_MS = 30 * 60 * 1000;
+
+  useEffect(() => {
+    const stored = localStorage.getItem("pos_lockout_until");
+    if (stored) {
+      const until = Number(stored);
+      if (Date.now() < until) setLockoutUntil(until);
+      else localStorage.removeItem("pos_lockout_until");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!lockoutUntil) return;
+    const iv = setInterval(() => {
+      const rem = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (rem <= 0) { setLockoutUntil(null); setPinAttempts(0); localStorage.removeItem("pos_lockout_until"); clearInterval(iv); }
+      else setLockoutCountdown(rem);
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [lockoutUntil]);
+
   // --- INITIALIZATION ---
   useEffect(() => {
     const storedId = typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null;
@@ -116,32 +152,48 @@ export default function SalesPage() {
     }
   };
 
-  // --- 🔥 BUG FIX 2: Staff Login - add shop_id filter for security ---
+  // --- 🔥 BUG FIX 2: Staff Login with lockout ---
   const handleStaffLogin = async () => {
+    // Lockout check
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      return alert(`🔒 Too many failed attempts. Wait ${lockoutCountdown}s`);
+    }
     if (pin.length < 4 || pin.length > 6) return alert("PIN must be 4–6 digits");
     setLoginLoading(true);
 
-    // Get current owner's user ID to scope staff lookup
     const { data: { user: ownerUser } } = await supabase.auth.getUser();
 
     let query = supabase.from("staff").select("*").eq("pin_code", pin).eq("is_active", true);
-    // Add shop_id filter if we know the owner (prevents cross-shop login)
     if (ownerUser) query = query.eq("shop_id", ownerUser.id);
 
-    const { data, error } = await query.maybeSingle();
+    const { data } = await query.maybeSingle();
 
-    if (error || !data) {
-      alert("❌ Invalid PIN"); setPin("");
+    if (!data) {
+      const newAttempts = pinAttempts + 1;
+      setPinAttempts(newAttempts);
+      const remaining = PIN_MAX_ATTEMPTS - newAttempts;
+      if (newAttempts >= PIN_MAX_ATTEMPTS) {
+        const until = Date.now() + LOCKOUT_MS;
+        setLockoutUntil(until);
+        localStorage.setItem("pos_lockout_until", String(until));
+        alert(`🔒 Terminal locked for 30 minutes`);
+      } else {
+        alert(`❌ Invalid PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} left`);
+      }
+      setPin("");
     } else {
+      // Success
+      setPinAttempts(0);
+      localStorage.removeItem("pos_lockout_until");
       if (data.role !== 'admin' && data.store_id && data.store_id !== activeStoreId) {
-        alert("❌ Access Denied: You belong to a different store.");
-        setPin("");
+        alert("❌ Access Denied: You belong to a different store."); setPin("");
       } else {
         setCurrentStaff(data); setPin("");
       }
     }
     setLoginLoading(false);
   };
+
 
   const handleLogout = () => { setCurrentStaff(null); setCart([]); setPhone(""); setName(""); };
 
@@ -275,6 +327,7 @@ export default function SalesPage() {
         }
       });
 
+      const invoiceNumber = generateInvoiceNumber();
       const { data: saleData, error: saleError } = await supabase.from("sales").insert([{
         total_amount: Number(finalTotal.toFixed(2)),
         customer_id: customerId,
@@ -282,6 +335,7 @@ export default function SalesPage() {
         total_savings: Number(totalSavings.toFixed(2)) || 0,
         staff_id: currentStaff?.id,
         store_id: activeStoreId,
+        invoice_number: invoiceNumber,
         created_at: new Date().toISOString()
       }]).select('id').single();
 
@@ -309,6 +363,7 @@ export default function SalesPage() {
 
       setLastSale({
         id: saleData.id,
+        invoiceNumber,
         date: new Date().toLocaleDateString('en-IN'),
         time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
         customer: { name: name || "Guest", phone: phone || "N/A" },

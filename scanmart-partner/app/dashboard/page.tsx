@@ -21,6 +21,37 @@ export default function DashboardHome() {
   const [showForgotPin, setShowForgotPin] = useState(false);
   const [loginShopId, setLoginShopId] = useState<string | null>(null);
 
+  // 🔒 PIN Lockout State
+  const [pinAttempts, setPinAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutCountdown, setLockoutCountdown] = useState(0);
+  const PIN_MAX_ATTEMPTS = 5;
+  const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+
+  // Restore lockout state from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("dash_lockout_until");
+    if (stored) {
+      const until = Number(stored);
+      if (Date.now() < until) setLockoutUntil(until);
+      else localStorage.removeItem("dash_lockout_until");
+    }
+  }, []);
+
+  // Countdown timer when locked out
+  useEffect(() => {
+    if (!lockoutUntil) return;
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockoutUntil(null); setPinAttempts(0);
+        localStorage.removeItem("dash_lockout_until");
+        clearInterval(interval);
+      } else setLockoutCountdown(remaining);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
+
   const [userRole, setUserRole] = useState<string | null>(null);
   const [currentStaffId, setCurrentStaffId] = useState<string | null>(null);
   const [staffName, setStaffName] = useState("");
@@ -64,8 +95,12 @@ export default function DashboardHome() {
     setLoading(false);
   };
 
-  // ─── PIN unlock ─────────────────────────────────────────────
+  // ─── PIN unlock (with brute-force lockout) ──────────────────
   const handleUnlock = async () => {
+    // Check if locked out
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      return setPinError(`🔒 Too many attempts. Try again in ${lockoutCountdown}s`);
+    }
     if (pin.length < 4) return setPinError("PIN must be 4–6 digits");
     setPinError("");
     setLoading(true);
@@ -81,7 +116,7 @@ export default function DashboardHome() {
     const currentShopOwnerId = authData.user.id;
     setLoginShopId(currentShopOwnerId);
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("staff")
       .select("*")
       .eq("pin_code", pin)
@@ -90,6 +125,9 @@ export default function DashboardHome() {
       .maybeSingle();
 
     if (data) {
+      // ✅ Success: reset lockout
+      setPinAttempts(0);
+      localStorage.removeItem("dash_lockout_until");
       sessionStorage.setItem("active_staff_id", data.id);
       setUserRole(data.role);
       setCurrentStaffId(data.id);
@@ -98,7 +136,18 @@ export default function DashboardHome() {
       setPin("");
       fetchDashboardData(data.role, data.id, data.shop_id);
     } else {
-      setPinError("❌ Invalid PIN for this Shop");
+      // ❌ Failed attempt
+      const newAttempts = pinAttempts + 1;
+      setPinAttempts(newAttempts);
+      const remaining = PIN_MAX_ATTEMPTS - newAttempts;
+      if (newAttempts >= PIN_MAX_ATTEMPTS) {
+        const until = Date.now() + LOCKOUT_DURATION_MS;
+        setLockoutUntil(until);
+        localStorage.setItem("dash_lockout_until", String(until));
+        setPinError(`🔒 Locked for 30 minutes after ${PIN_MAX_ATTEMPTS} failed attempts`);
+      } else {
+        setPinError(`❌ Invalid PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining`);
+      }
       setPin("");
       inputRef.current?.focus();
     }
