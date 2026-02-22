@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import {
     RotateCcw, Search, Phone, Receipt, Package,
     CheckCircle, XCircle, Loader2,
-    Minus, Plus, BadgePercent, ArrowLeft, Store
+    Minus, Plus, BadgePercent, ArrowLeft, Store, Lock
 } from "lucide-react";
 
 interface SaleItem {
@@ -31,6 +31,8 @@ type Step = "search" | "items" | "done";
 export default function ReturnsPage() {
     const [step, setStep] = useState<Step>("search");
     const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
+    const [isAuthorised, setIsAuthorised] = useState(false);
+    const [authChecking, setAuthChecking] = useState(true);
 
     // Search
     const [searchMode, setSearchMode] = useState<"phone" | "invoice">("phone");
@@ -51,6 +53,22 @@ export default function ReturnsPage() {
     const [refundSummary, setRefundSummary] = useState<any>(null);
 
     useEffect(() => {
+        const checkAuth = async () => {
+            const staffId = typeof window !== "undefined" ? sessionStorage.getItem("active_staff_id") : null;
+            if (!staffId) { setAuthChecking(false); return; }
+
+            const { data } = await supabase
+                .from("staff")
+                .select("id, role")
+                .eq("id", staffId)
+                .eq("is_active", true)
+                .single();
+
+            if (data) setIsAuthorised(true);
+            setAuthChecking(false);
+        };
+        checkAuth();
+
         const storedId = typeof window !== "undefined" ? localStorage.getItem("active_store_id") : null;
         if (storedId) setActiveStoreId(storedId);
         else fetchFirstStore();
@@ -185,8 +203,7 @@ export default function ReturnsPage() {
 
             const { error: returnErr } = await supabase.from("returns").insert([returnRecord]);
             if (returnErr) {
-                // Table might not exist yet — just show SQL hint
-                console.warn("Returns table not found. Run SQL to enable tracking:", returnErr.message);
+                // Table might not exist yet — graceful skip
             }
 
             setRefundSummary({
@@ -217,6 +234,31 @@ export default function ReturnsPage() {
         (sum, i) => sum + i.price_at_sale * i.returnQty,
         0
     );
+
+
+    // ─── Auth gate ───────────────────────────────────────────────
+    if (authChecking) {
+        return (
+            <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+                <Loader2 className="animate-spin text-blue-500" size={36} />
+            </div>
+        );
+    }
+
+    if (!isAuthorised) {
+        return (
+            <div className="min-h-screen bg-[#020617] flex items-center justify-center text-white">
+                <div className="bg-slate-900 border border-slate-800 p-10 rounded-[2rem] text-center max-w-sm">
+                    <Lock size={40} className="text-slate-600 mx-auto mb-4" />
+                    <h2 className="text-xl font-black uppercase tracking-widest mb-2">Session Expired</h2>
+                    <p className="text-slate-500 text-sm mb-6">Please log in from the dashboard to access Returns.</p>
+                    <a href="/dashboard" className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all inline-block">
+                        Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        );
+    }
 
     // ═══════════════ RENDER ═══════════════
     return (

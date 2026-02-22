@@ -16,7 +16,9 @@ import {
   ScanBarcode,
   Shield,
   RefreshCcw,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  Sparkles
 } from "lucide-react";
 // 🔥 NEW IMPORT
 import StoreSwitcher from "@/components/StoreSwitcher";
@@ -89,6 +91,8 @@ export default function Sidebar() {
     { label: "Customers", icon: <Users size={20} />, href: "/dashboard/customers", roles: ["admin", "manager"] },
     { label: "Team Access", icon: <Shield size={20} />, href: "/dashboard/staff", roles: ["admin"] },
     { label: "Sticker Studio", icon: <ScanBarcode size={20} />, href: "/dashboard/stickers", roles: ["admin", "manager"] },
+    { label: "Z-Report", icon: <FileText size={20} />, href: "/dashboard/zreport", roles: ["admin", "manager"] },
+    { label: "Onboarding", icon: <Sparkles size={20} />, href: "/dashboard/onboarding", roles: ["admin"] },
     { label: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", roles: ["admin"] },
   ];
 
