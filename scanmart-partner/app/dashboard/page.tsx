@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { ArrowUpRight, Zap, Loader2, Calendar, IndianRupee, Wallet, ShieldCheck, Lock, TrendingUp, Users, Package, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import ForgotPinModal from "@/components/ForgotPinModal";
-import { verifyStaffPin } from "@/app/actions/auth";
+import { verifyPin } from "@/lib/pin";
 
 export default function DashboardHome() {
 
@@ -14,7 +14,6 @@ export default function DashboardHome() {
   const [pinError, setPinError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [showForgotPin, setShowForgotPin] = useState(false);
-  const [loginShopId, setLoginShopId] = useState<string | null>(null);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
 
   // 🔒 PIN Lockout State
@@ -98,7 +97,6 @@ export default function DashboardHome() {
 
   // ─── PIN unlock (with brute-force lockout) ──────────────────
   const handleUnlock = async () => {
-    // Check if locked out
     if (lockoutUntil && Date.now() < lockoutUntil) {
       return setPinError(`🔒 Too many attempts. Try again in ${lockoutCountdown}s`);
     }
@@ -106,43 +104,51 @@ export default function DashboardHome() {
     setPinError("");
     setLoading(true);
 
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData?.user) {
-      setPinError("Session expired. Log In again.");
-      sessionStorage.clear();
-      window.location.href = "/login";
-      return;
-    }
+    try {
+      // Client-side fetch — browser session satisfies RLS on staff table
+      const { data: staffList, error } = await supabase
+        .from("staff")
+        .select("*")
+        .eq("is_active", true)
+        .eq("store_id", activeStoreId);
 
-    // Use active store to scope staff lookup
-    const result = await verifyStaffPin(pin, activeStoreId || undefined);
+      if (error) throw error;
 
-    if (result.success && result.staff) {
-      const data = result.staff;
-      // ✅ Success: reset lockout
-      setPinAttempts(0);
-      localStorage.removeItem("dash_lockout_until");
-      sessionStorage.setItem("active_staff_id", data.id);
-      setUserRole(data.role);
-      setStaffName(data.name || "");
-      setIsLocked(false);
-      setPin("");
-      fetchDashboardData(data.role, data.id, data.shop_id);
-    } else {
-      // ❌ Failed attempt
-      const newAttempts = pinAttempts + 1;
-      setPinAttempts(newAttempts);
-      const remaining = PIN_MAX_ATTEMPTS - newAttempts;
-      if (newAttempts >= PIN_MAX_ATTEMPTS) {
-        const until = Date.now() + LOCKOUT_DURATION_MS;
-        setLockoutUntil(until);
-        localStorage.setItem("dash_lockout_until", String(until));
-        setPinError(`🔒 Locked for 30 minutes after ${PIN_MAX_ATTEMPTS} failed attempts`);
-      } else {
-        setPinError(`❌ Invalid PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining`);
+      let matchedStaff: any = null;
+      for (const member of (staffList || [])) {
+        if (member.pin_code && await verifyPin(pin, member.pin_code)) {
+          matchedStaff = member;
+          break;
+        }
       }
-      setPin("");
-      inputRef.current?.focus();
+
+      if (matchedStaff) {
+        setPinAttempts(0);
+        localStorage.removeItem("dash_lockout_until");
+        sessionStorage.setItem("active_staff_id", matchedStaff.id);
+        sessionStorage.removeItem("active_staff_role");
+        setUserRole(matchedStaff.role);
+        setStaffName(matchedStaff.name || "");
+        setIsLocked(false);
+        setPin("");
+        fetchDashboardData(matchedStaff.role, matchedStaff.id, matchedStaff.store_id);
+      } else {
+        const newAttempts = pinAttempts + 1;
+        setPinAttempts(newAttempts);
+        const remaining = PIN_MAX_ATTEMPTS - newAttempts;
+        if (newAttempts >= PIN_MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_DURATION_MS;
+          setLockoutUntil(until);
+          localStorage.setItem("dash_lockout_until", String(until));
+          setPinError(`🔒 Locked for 30 minutes after ${PIN_MAX_ATTEMPTS} failed attempts`);
+        } else {
+          setPinError(`❌ Invalid PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining`);
+        }
+        setPin("");
+        inputRef.current?.focus();
+      }
+    } catch (err: any) {
+      setPinError("Login error: " + err.message);
     }
     setLoading(false);
   };

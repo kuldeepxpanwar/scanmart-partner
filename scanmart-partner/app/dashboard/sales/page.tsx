@@ -12,7 +12,7 @@ import BarcodeScanner from "@/components/BarcodeScanner";
 import ForgotPinModal from "@/components/ForgotPinModal";
 
 // --- UTILS ---
-import { verifyStaffPin } from "@/app/actions/auth";
+import { verifyPin } from "@/lib/pin";
 import { idbGetQueue, idbRemoveSale, idbQueueCount } from "@/lib/offlineDb";
 
 export default function SalesPage() {
@@ -148,27 +148,48 @@ export default function SalesPage() {
     if (pin.length < 4 || pin.length > 6) return alert("PIN must be 4–6 digits");
     setLoginLoading(true);
 
-    const result = await verifyStaffPin(pin, activeStoreId || undefined);
+    try {
+      // Fetch active staff for this store client-side (browser session satisfies RLS)
+      const { data: staffList, error } = await supabase
+        .from("staff")
+        .select("*")
+        .eq("is_active", true)
+        .eq("store_id", activeStoreId);
 
-    if (!result.success || !result.staff) {
-      const newAttempts = pinAttempts + 1;
-      setPinAttempts(newAttempts);
-      const remaining = PIN_MAX_ATTEMPTS - newAttempts;
-      if (newAttempts >= PIN_MAX_ATTEMPTS) {
-        const until = Date.now() + LOCKOUT_MS;
-        setLockoutUntil(until);
-        localStorage.setItem("pos_lockout_until", String(until));
-        alert(`🔒 Terminal locked for 30 minutes`);
-      } else {
-        alert(`❌ Invalid PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} left`);
+      if (error) throw error;
+
+      // Find matching staff by comparing PIN client-side
+      let matchedStaff: any = null;
+      for (const member of (staffList || [])) {
+        if (member.pin_code && await verifyPin(pin, member.pin_code)) {
+          matchedStaff = member;
+          break;
+        }
       }
-      setPin("");
-    } else {
-      setPinAttempts(0);
-      localStorage.removeItem("pos_lockout_until");
-      setCurrentStaff(result.staff);
-      setPin("");
-      sessionStorage.setItem("active_staff_id", result.staff.id);
+
+      if (!matchedStaff) {
+        const newAttempts = pinAttempts + 1;
+        setPinAttempts(newAttempts);
+        const remaining = PIN_MAX_ATTEMPTS - newAttempts;
+        if (newAttempts >= PIN_MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_MS;
+          setLockoutUntil(until);
+          localStorage.setItem("pos_lockout_until", String(until));
+          alert(`🔒 Terminal locked for 30 minutes`);
+        } else {
+          alert(`❌ Invalid PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} left`);
+        }
+        setPin("");
+      } else {
+        setPinAttempts(0);
+        localStorage.removeItem("pos_lockout_until");
+        setCurrentStaff(matchedStaff);
+        setPin("");
+        sessionStorage.setItem("active_staff_id", matchedStaff.id);
+        sessionStorage.removeItem("active_staff_role"); // clear sidebar cache so it re-fetches
+      }
+    } catch (err: any) {
+      alert("Login error: " + err.message);
     }
     setLoginLoading(false);
   };
