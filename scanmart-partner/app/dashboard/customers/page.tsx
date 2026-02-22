@@ -132,11 +132,11 @@ export default function CustomersPage() {
         sale_items (
             quantity, 
             price_at_sale,
-            inventory ( name ) 
+            inventory:product_id ( name ) 
         )
       `)
       .eq("customer_id", customer.id)
-      .eq("store_id", activeStoreId) // Filter sales by current store too
+      .eq("store_id", activeStoreId)
       .order("created_at", { ascending: false });
 
     if (error) {
