@@ -94,7 +94,7 @@ export default function ReturnsPage() {
           customers:customer_id ( name, phone ),
           sale_items (
             id, quantity, price_at_sale, product_id,
-            inventory:product_id ( name, id )
+            inventory!fk_product ( name, id )
           )
         `)
                 .eq("store_id", activeStoreId)
@@ -134,7 +134,7 @@ export default function ReturnsPage() {
                       customers:customer_id ( name, phone ),
                       sale_items (
                         id, quantity, price_at_sale, product_id,
-                        inventory:product_id ( name, id )
+                        inventory!fk_product ( name, id )
                       )
                     `)
                     .eq("store_id", activeStoreId)

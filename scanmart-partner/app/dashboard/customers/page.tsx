@@ -132,7 +132,7 @@ export default function CustomersPage() {
         sale_items (
             quantity, 
             price_at_sale,
-            inventory:product_id ( name ) 
+            inventory!fk_product ( name ) 
         )
       `)
       .eq("customer_id", customer.id)

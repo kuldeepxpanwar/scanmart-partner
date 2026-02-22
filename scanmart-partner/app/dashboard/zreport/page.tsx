@@ -88,7 +88,7 @@ export default function ZReportPage() {
             const saleIds = sales.map((s: any) => s.id);
             const { data: saleItems } = await supabase
                 .from("sale_items")
-                .select("quantity, price_at_sale, product_id, inventory:product_id(name)")
+                .select("quantity, price_at_sale, product_id, inventory!fk_product(name)")
                 .in("sale_id", saleIds);
 
             // Aggregate top items

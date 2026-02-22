@@ -111,7 +111,7 @@ export default function AnalyticsPage() {
           const batch = saleIds.slice(i, i + batchSize);
           const { data: batchItems } = await supabase
             .from("sale_items")
-            .select("product_id, quantity, price_at_sale, inventory:product_id(name, category)")
+            .select("product_id, quantity, price_at_sale, inventory!fk_product(name, category)")
             .in("sale_id", batch);
           allSaleItems = allSaleItems.concat(batchItems || []);
         }
