@@ -149,10 +149,12 @@ export default function SalesPage() {
     setLoginLoading(true);
 
     try {
-      // Fetch active staff — skip store filter if activeStoreId not yet loaded
-      let staffQuery = supabase.from("staff").select("*").eq("is_active", true);
-      if (activeStoreId) staffQuery = staffQuery.eq("store_id", activeStoreId);
-      const { data: staffList, error } = await staffQuery;
+      // Fetch ALL active staff — no store_id filter because admin may have store_id=NULL (created via Owner Setup)
+      // Security is provided by bcrypt PIN comparison, not store_id filtering
+      const { data: staffList, error } = await supabase
+        .from("staff")
+        .select("*")
+        .eq("is_active", true);
 
       if (error) throw error;
 

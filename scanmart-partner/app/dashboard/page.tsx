@@ -105,10 +105,12 @@ export default function DashboardHome() {
     setLoading(true);
 
     try {
-      // Client-side fetch — browser session satisfies RLS on staff table
-      let staffQuery = supabase.from("staff").select("*").eq("is_active", true);
-      if (activeStoreId) staffQuery = staffQuery.eq("store_id", activeStoreId);
-      const { data: staffList, error } = await staffQuery;
+      // Fetch ALL active staff — admin may have store_id=NULL (created via Owner Setup)
+      // bcrypt handles the security, store_id filter only breaks login for owners
+      const { data: staffList, error } = await supabase
+        .from("staff")
+        .select("*")
+        .eq("is_active", true);
 
       if (error) throw error;
 
