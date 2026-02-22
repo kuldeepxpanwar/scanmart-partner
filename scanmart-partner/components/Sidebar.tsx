@@ -21,7 +21,6 @@ import {
   Sparkles
 } from "lucide-react";
 // 🔥 NEW IMPORT
-import StoreSwitcher from "@/components/StoreSwitcher";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -132,7 +131,6 @@ export default function Sidebar() {
 
       {/* 🔥 NEW: Store Switcher Added Here */}
       <div className="px-4 mb-4">
-        <StoreSwitcher />
       </div>
 
       {/* --- Navigation Links --- */}

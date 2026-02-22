@@ -22,6 +22,9 @@ export default function SettingsPage() {
     const [newStoreName, setNewStoreName] = useState("");
     const [newStoreLocation, setNewStoreLocation] = useState("");
     const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
+    const [activeStoreId, setActiveStoreId] = useState<string | null>(
+        typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null
+    );
 
     // --- 🔐 SECURITY STATES ---
     const [isLocked, setIsLocked] = useState(true);
@@ -269,9 +272,9 @@ export default function SettingsPage() {
 
                     <div className="grid gap-3">
                         {stores.map(store => (
-                            <div key={store.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+                            <div key={store.id} className={`bg-slate-950 p-4 rounded-xl border flex justify-between items-center transition-all ${activeStoreId === store.id ? 'border-blue-500/50 bg-blue-500/5' : 'border-slate-800'}`}>
                                 <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-lg ${store.is_main_store ? 'bg-orange-500/20 text-orange-500' : 'bg-slate-800 text-slate-400'}`}>
+                                    <div className={`p-3 rounded-lg ${store.is_main_store ? 'bg-orange-500/20 text-orange-500' : activeStoreId === store.id ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-400'}`}>
                                         <Store size={20} />
                                     </div>
                                     <div>
@@ -284,11 +287,29 @@ export default function SettingsPage() {
                                         </p>
                                     </div>
                                 </div>
-                                {!store.is_main_store && (
-                                    <button onClick={() => handleDeleteStore(store.id, store.is_main_store)} className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
-                                        <Trash2 size={16} />
-                                    </button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    {activeStoreId === store.id ? (
+                                        <span className="text-[9px] font-black uppercase text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
+                                            <CheckCircle size={10} /> Active
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                localStorage.setItem("active_store_id", store.id);
+                                                setActiveStoreId(store.id);
+                                                setTimeout(() => window.location.reload(), 300);
+                                            }}
+                                            className="text-[9px] font-black uppercase text-slate-400 hover:text-white bg-slate-800 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 px-3 py-1.5 rounded-lg transition-all"
+                                        >
+                                            Switch
+                                        </button>
+                                    )}
+                                    {!store.is_main_store && (
+                                        <button onClick={() => handleDeleteStore(store.id, store.is_main_store)} className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
