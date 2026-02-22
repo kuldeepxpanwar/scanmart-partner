@@ -302,7 +302,29 @@ export default function CustomersPage() {
         {loading ? (
           <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin text-blue-500" size={40} /></div>
         ) : filteredCustomers.length === 0 ? (
-          <div className="col-span-full py-20 text-center text-slate-500 font-bold uppercase tracking-widest">No customers found in this store</div>
+          <div className="col-span-full py-20 flex flex-col items-center justify-center gap-5">
+            <div className="w-28 h-28 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center">
+              <Users size={48} className="text-slate-700" />
+            </div>
+            <div className="text-center">
+              <p className="text-white font-black text-lg uppercase tracking-widest mb-2">
+                {searchTerm ? 'No Results Found' : 'No Customers Yet'}
+              </p>
+              <p className="text-slate-600 text-sm font-bold">
+                {searchTerm
+                  ? `No customers match "${searchTerm}"`
+                  : 'Customers appear automatically when you complete a sale with a phone number.'}
+              </p>
+            </div>
+            {!searchTerm && (
+              <a
+                href="/dashboard/sales"
+                className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 text-white transition-all active:scale-95"
+              >
+                <ShoppingBag size={14} /> Start a New Sale
+              </a>
+            )}
+          </div>
         ) : (
           filteredCustomers.map((c, index) => (
             <div key={c.id} className={`relative p-5 rounded-[2rem] border transition-all flex flex-col justify-between group overflow-hidden ${index < 3 && showVIPOnly ? 'bg-amber-900/10 border-amber-500/30' : 'bg-slate-900/40 border-slate-800 hover:border-blue-500/30'}`}>
@@ -414,8 +436,8 @@ export default function CustomersPage() {
                       key={t.id}
                       onClick={() => setSelectedTemplate(t)}
                       className={`min-w-[200px] border p-3 rounded-xl cursor-pointer transition-all ${selectedTemplate.id === t.id
-                          ? 'bg-purple-900/40 border-purple-500 shadow-lg shadow-purple-900/20'
-                          : 'bg-slate-950 border-slate-800 hover:border-purple-500'
+                        ? 'bg-purple-900/40 border-purple-500 shadow-lg shadow-purple-900/20'
+                        : 'bg-slate-950 border-slate-800 hover:border-purple-500'
                         }`}
                     >
                       <p className="font-bold text-xs text-slate-200 mb-1">{t.title}</p>

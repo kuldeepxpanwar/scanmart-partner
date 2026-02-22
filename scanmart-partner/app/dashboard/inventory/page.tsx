@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -105,6 +105,21 @@ export default function InventoryPage() {
 
   // Dropdown State
   const [isReportMenuOpen, setIsReportMenuOpen] = useState(false);
+
+  // 🔥 Custom Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmColor?: string;
+    onConfirm: () => void;
+  }>({
+    open: false, title: "", message: "", onConfirm: () => { },
+  });
+  const showConfirm = (title: string, message: string, onConfirm: () => void, confirmLabel = "Confirm", confirmColor = "bg-red-600 hover:bg-red-500") =>
+    setConfirmDialog({ open: true, title, message, onConfirm, confirmLabel, confirmColor });
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }));
 
   // 🔥 Report Date Filter State
   const [reportDateRange, setReportDateRange] = useState({ start: "", end: "" });
@@ -216,36 +231,36 @@ export default function InventoryPage() {
     setLoading(false);
   };
 
-  // --- 🔴 SOFT DELETE FUNCTION ---
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm("Are you sure? This will archive the product.")) return;
-    setProducts(prev => prev.filter(item => item.id !== id));
-
-    const { error } = await supabase
-      .from("inventory")
-      .update({ is_active: false })
-      .eq("id", id);
-
-    if (error) {
-      alert("Archive failed: " + error.message);
-      fetchData();
-    }
+  // --- 🔴 SOFT DELETE FUNCTION (Custom Dialog) ---
+  const handleDeleteItem = (id: string) => {
+    showConfirm(
+      "Archive Product?",
+      "This product will be archived and hidden from inventory. You can restore it anytime.",
+      async () => {
+        closeConfirm();
+        setProducts(prev => prev.filter(item => item.id !== id));
+        const { error } = await supabase.from("inventory").update({ is_active: false }).eq("id", id);
+        if (error) { alert("Archive failed: " + error.message); fetchData(); }
+      },
+      "Archive",
+      "bg-red-600 hover:bg-red-500"
+    );
   };
 
-  // --- 🟢 RESTORE (UN-ARCHIVE) ---
-  const handleRestoreItem = async (id: string) => {
-    if (!confirm("Restore this item?")) return;
-    setProducts(prev => prev.filter(item => item.id !== id));
-
-    const { error } = await supabase
-      .from("inventory")
-      .update({ is_active: true })
-      .eq("id", id);
-
-    if (error) {
-      alert("Restore failed: " + error.message);
-      fetchData();
-    }
+  // --- 🟢 RESTORE (UN-ARCHIVE, Custom Dialog) ---
+  const handleRestoreItem = (id: string) => {
+    showConfirm(
+      "Restore Product?",
+      "This product will be brought back to active inventory.",
+      async () => {
+        closeConfirm();
+        setProducts(prev => prev.filter(item => item.id !== id));
+        const { error } = await supabase.from("inventory").update({ is_active: true }).eq("id", id);
+        if (error) { alert("Restore failed: " + error.message); fetchData(); }
+      },
+      "Restore",
+      "bg-green-600 hover:bg-green-500"
+    );
   };
 
   // --- 🟢 ADD PRODUCT (Fixed for Multi-Store) ---
@@ -616,7 +631,43 @@ export default function InventoryPage() {
               {loading ? (
                 <tr><td colSpan={5} className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" size={32} /></td></tr>
               ) : filteredProducts.length === 0 ? (
-                <tr><td colSpan={5} className="p-20 text-center text-slate-500 font-bold uppercase text-xs">No Items Found in this Store</td></tr>
+                <tr><td colSpan={5} className="p-16 text-center">
+                  <div className="flex flex-col items-center justify-center gap-4">
+                    {filterType === 'dead_stock' ? (
+                      <>
+                        <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center">
+                          <span className="text-4xl">🎉</span>
+                        </div>
+                        <p className="text-green-400 font-black text-base uppercase tracking-widest">No Dead Stock!</p>
+                        <p className="text-slate-600 text-xs font-bold">All products are selling well.</p>
+                      </>
+                    ) : filterType === 'low_stock' ? (
+                      <>
+                        <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center">
+                          <span className="text-4xl">✅</span>
+                        </div>
+                        <p className="text-green-400 font-black text-base uppercase tracking-widest">All Stocked Up!</p>
+                        <p className="text-slate-600 text-xs font-bold">No low stock items right now.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center">
+                          <Archive size={40} className="text-slate-600" />
+                        </div>
+                        <div>
+                          <p className="text-white font-black text-base uppercase tracking-widest mb-1">No Products Yet</p>
+                          <p className="text-slate-600 text-xs font-bold">Add your first product to start selling.</p>
+                        </div>
+                        <button
+                          onClick={() => setIsAddOpen(true)}
+                          className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
+                        >
+                          <Plus size={14} /> Add First Product
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td></tr>
               ) : (
                 filteredProducts.map((item) => {
                   const aging = getAgingStatus(item.last_sold_at);
@@ -833,6 +884,53 @@ export default function InventoryPage() {
               </div>
               <button onClick={handleUpdateItem} className="w-full bg-yellow-600 hover:bg-yellow-700 py-4 rounded-2xl font-black mt-2 transition-all">UPDATE NOW</button>
               <button onClick={() => setIsEditOpen(false)} className="w-full text-slate-500 py-2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 🔥 CUSTOM CONFIRM DIALOG */}
+      {confirmDialog.open && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
+              <AlertTriangle size={28} className="text-red-400" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-400 text-sm mb-7 leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-black text-sm text-slate-300 uppercase tracking-widest transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className={`flex-1 ${confirmDialog.confirmColor || 'bg-red-600 hover:bg-red-500'} py-3 rounded-2xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95`}
+              >
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM CONFIRM DIALOG */}
+      {confirmDialog.open && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
+              <AlertTriangle size={28} className="text-red-400" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-400 text-sm mb-7 leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button onClick={closeConfirm} className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-black text-sm text-slate-300 uppercase tracking-widest transition-all">
+                Cancel
+              </button>
+              <button onClick={confirmDialog.onConfirm} className={`flex-1 ${confirmDialog.confirmColor || 'bg-red-600 hover:bg-red-500'} py-3 rounded-2xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95`}>
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
             </div>
           </div>
         </div>

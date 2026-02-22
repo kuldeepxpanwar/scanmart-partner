@@ -5,8 +5,9 @@ import {
     Save, Store, FileText, AlertTriangle, Loader2,
     LogOut, Zap, Crown, Rocket, Star, X, CheckCircle,
     Wifi, Printer, ChevronDown, ChevronRight, Lock,
-    MapPin, Plus, Trash2, Building2, QrCode
+    MapPin, Plus, Trash2, Building2, QrCode, CreditCard
 } from "lucide-react";
+import QRCode from "react-qr-code";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import ForgotPinModal from "@/components/ForgotPinModal";
@@ -39,11 +40,14 @@ export default function SettingsPage() {
     const [printerType, setPrinterType] = useState("browser");
     const [printerIP, setPrinterIP] = useState("");
 
-    // 🔥 UPDATED STATE: Added upi_id
+    // Payment Gateway Settings
     const [settings, setSettings] = useState({
         shop_name: "", shop_address: "", shop_phone: "", gstin: "", invoice_footer: "",
-        upi_id: ""
+        upi_id: "",
+        razorpay_key_id: "",
+        razorpay_key_secret: "",
     });
+    const [showRazorpaySecret, setShowRazorpaySecret] = useState(false);
 
     const MY_WHATSAPP = "9358752147";
     const MY_UPI_ID = "panwarkuldeep256-2@oksbi";
@@ -88,7 +92,9 @@ export default function SettingsPage() {
                 shop_phone: settingData.shop_phone || "",
                 gstin: settingData.gstin || "",
                 invoice_footer: settingData.invoice_footer || "",
-                upi_id: settingData.upi_id || ""
+                upi_id: settingData.upi_id || "",
+                razorpay_key_id: settingData.razorpay_key_id || "",
+                razorpay_key_secret: settingData.razorpay_key_secret || "",
             });
         }
 
@@ -376,7 +382,115 @@ export default function SettingsPage() {
                     </div>
                 </section>
 
-                {/* 5️⃣ DANGER ZONE */}
+                {/* 5️⃣ PAYMENT GATEWAY */}
+                <section className="bg-slate-900/40 border border-slate-800 p-6 md:p-8 rounded-[2rem]">
+                    <h2 className="text-sm font-black text-emerald-400 flex items-center gap-2 mb-2 uppercase tracking-widest">
+                        <QrCode size={18} /> Payment Gateway
+                    </h2>
+                    <p className="text-[10px] text-slate-500 mb-6">Configure UPI and Razorpay for your billing terminal.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        {/* ── UPI Block ─────────────────────────────── */}
+                        <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-7 h-7 bg-green-500/20 rounded-lg flex items-center justify-center">
+                                    <QrCode size={14} className="text-green-400" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-black text-white">UPI (PhonePe / Paytm / BHIM)</p>
+                                    <p className="text-[10px] text-slate-500">Works for all small-medium merchants</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Your UPI ID</label>
+                                <input
+                                    type="text"
+                                    placeholder="shopname@ybl  or  9876543210@paytm"
+                                    value={settings.upi_id}
+                                    onChange={(e) => setSettings({ ...settings, upi_id: e.target.value.trim() })}
+                                    className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-green-400 font-bold text-sm outline-none focus:border-green-500 transition-all"
+                                />
+                                <p className="text-[9px] text-slate-600 ml-1">Billing me "UPI" select karne par yahi QR banta hai</p>
+                            </div>
+
+                            {/* Live QR Preview */}
+                            {settings.upi_id && (
+                                <div className="flex flex-col items-center gap-2 p-3 bg-white rounded-xl">
+                                    <QRCode
+                                        value={`upi://pay?pa=${settings.upi_id}&pn=${encodeURIComponent(settings.shop_name || 'Shop')}&cu=INR`}
+                                        size={110}
+                                    />
+                                    <p className="text-[9px] text-slate-700 font-bold">{settings.upi_id}</p>
+                                </div>
+                            )}
+
+                            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+                                <p className="text-[10px] text-blue-400 font-bold">💡 Auto-confirm chahiye?</p>
+                                <p className="text-[10px] text-slate-500 mt-1">PhonePe Business ya Paytm Business account se API key milegi — tab payment auto-verified hoga. Abhi cashier manually "Mark Paid" karta hai.</p>
+                            </div>
+                        </div>
+
+                        {/* ── Razorpay Block ────────────────────────── */}
+                        <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-7 h-7 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                    <CreditCard size={14} className="text-blue-400" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-black text-white">Razorpay</p>
+                                    <p className="text-[10px] text-slate-500">For high-volume / multi-store businesses</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Key ID <span className="text-blue-400">(Public)</span></label>
+                                    <input
+                                        type="text"
+                                        placeholder="rzp_live_xxxxxxxxxxxxxxxx"
+                                        value={settings.razorpay_key_id}
+                                        onChange={(e) => setSettings({ ...settings, razorpay_key_id: e.target.value.trim() })}
+                                        className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-blue-400 font-mono text-[11px] outline-none focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Key Secret <span className="text-red-400">(Private)</span></label>
+                                    <div className="relative">
+                                        <input
+                                            type={showRazorpaySecret ? "text" : "password"}
+                                            placeholder="••••••••••••••••••••"
+                                            value={settings.razorpay_key_secret}
+                                            onChange={(e) => setSettings({ ...settings, razorpay_key_secret: e.target.value.trim() })}
+                                            className="w-full bg-slate-900 border border-slate-700 p-3 pr-10 rounded-xl text-red-400 font-mono text-[11px] outline-none focus:border-red-500 transition-all"
+                                        />
+                                        <button type="button" onClick={() => setShowRazorpaySecret(v => !v)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                                            <Lock size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {settings.razorpay_key_id ? (
+                                <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
+                                    <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
+                                    <p className="text-[10px] text-green-400 font-bold">Razorpay connected — billing me "Razorpay" option dikhega</p>
+                                </div>
+                            ) : (
+                                <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 space-y-1">
+                                    <p className="text-[10px] text-slate-400 font-bold">Keys kahan milenge?</p>
+                                    <p className="text-[10px] text-slate-500">1. dashboard.razorpay.com → Login</p>
+                                    <p className="text-[10px] text-slate-500">2. Settings → API Keys → Generate Key</p>
+                                    <p className="text-[10px] text-slate-500">3. Key ID + Secret yahan paste karo</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </section>
+
+                {/* 6️⃣ DANGER ZONE */}
                 <section className="border border-red-500/10 bg-red-500/5 p-6 rounded-[2rem]">
                     <h2 className="text-xs font-black text-red-500 uppercase tracking-widest mb-4 flex items-center gap-2"><AlertTriangle size={14} /> Danger Zone</h2>
                     <button onClick={() => supabase.auth.signOut().then(() => router.push("/login"))} className="w-full bg-slate-950 border border-slate-800 hover:border-red-500/50 text-slate-400 hover:text-red-500 py-4 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all"><LogOut size={16} /> Sign Out Partner</button>

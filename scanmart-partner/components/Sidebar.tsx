@@ -3,22 +3,23 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { 
-  LayoutDashboard, 
-  Package, 
-  BarChart3, 
-  Users, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Package,
+  BarChart3,
+  Users,
+  Settings,
   Truck,
   LogOut,
   Zap,
   ShoppingCart,
   ScanBarcode,
   Shield,
-  RefreshCcw 
+  RefreshCcw,
+  RotateCcw
 } from "lucide-react";
 // 🔥 NEW IMPORT
-import StoreSwitcher from "@/components/StoreSwitcher"; 
+import StoreSwitcher from "@/components/StoreSwitcher";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -38,14 +39,14 @@ export default function Sidebar() {
       }
 
       const storedStaffId = typeof window !== 'undefined' ? sessionStorage.getItem("active_staff_id") : null;
-      
+
       if (storedStaffId) {
         const { data } = await supabase
           .from("staff")
           .select("role")
           .eq("id", storedStaffId)
           .single();
-        
+
         if (data) setUserRole(data.role);
       } else {
         setUserRole("staff");
@@ -57,8 +58,8 @@ export default function Sidebar() {
   // 🔄 Switch User Function
   const handleSwitchUser = () => {
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem("active_staff_id"); 
-      window.location.reload(); 
+      sessionStorage.removeItem("active_staff_id");
+      window.location.reload();
     }
   };
 
@@ -70,10 +71,10 @@ export default function Sidebar() {
     } else {
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem("active_staff_id");
-        localStorage.removeItem("active_staff_id"); 
+        localStorage.removeItem("active_staff_id");
       }
       router.push("/login");
-      router.refresh(); 
+      router.refresh();
     }
   };
 
@@ -81,6 +82,7 @@ export default function Sidebar() {
   const allNavItems = [
     { label: "Overview", icon: <LayoutDashboard size={20} />, href: "/dashboard", roles: ["admin", "manager", "staff"] },
     { label: "Billing (Sales)", icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
+    { label: "Returns & Refunds", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager"] },
     { label: "Inventory", icon: <Package size={20} />, href: "/dashboard/inventory", roles: ["admin", "manager"] },
     { label: "Suppliers", icon: <Truck size={20} />, href: "/dashboard/suppliers", roles: ["admin", "manager"] },
     { label: "Analytics", icon: <BarChart3 size={20} />, href: "/dashboard/analytics", roles: ["admin", "manager"] },
@@ -90,7 +92,7 @@ export default function Sidebar() {
     { label: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", roles: ["admin"] },
   ];
 
-  const filteredNavItems = allNavItems.filter(item => 
+  const filteredNavItems = allNavItems.filter(item =>
     userRole ? item.roles.includes(userRole) : item.roles.includes("staff")
   );
 
@@ -115,7 +117,7 @@ export default function Sidebar() {
 
       {/* 🔥 NEW: Store Switcher Added Here */}
       <div className="px-4 mb-4">
-         <StoreSwitcher />
+        <StoreSwitcher />
       </div>
 
       {/* --- Navigation Links --- */}
@@ -126,11 +128,10 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
-                isActive 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" 
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-              }`}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+                }`}
             >
               <span className={`${isActive ? "text-white" : "group-hover:text-blue-400 transition-colors"}`}>
                 {item.icon}
@@ -146,9 +147,9 @@ export default function Sidebar() {
 
       {/* --- Footer: Actions --- */}
       <div className="p-4 border-t border-slate-800 space-y-2">
-        
+
         {/* 🔄 Switch User Button */}
-        <button 
+        <button
           onClick={handleSwitchUser}
           className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-all group"
         >
@@ -157,7 +158,7 @@ export default function Sidebar() {
         </button>
 
         {/* 🚪 Log Out Button */}
-        <button 
+        <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all group"
         >
