@@ -5,7 +5,7 @@ import {
     Save, Store, FileText, AlertTriangle, Loader2,
     LogOut, Zap, Crown, Rocket, Star, X, CheckCircle,
     Wifi, Printer, ChevronDown, ChevronRight, Lock,
-    MapPin, Plus, Trash2, Building2, QrCode, CreditCard
+    MapPin, Plus, Trash2, Building2, QrCode, CreditCard, Edit2
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,9 @@ export default function SettingsPage() {
     const [activeStoreId, setActiveStoreId] = useState<string | null>(
         typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null
     );
+    const [editingStore, setEditingStore] = useState<any>(null); // store being edited
+    const [editStoreForm, setEditStoreForm] = useState({ name: "", location: "", upi_id: "", razorpay_key_id: "" });
+    const [editSaving, setEditSaving] = useState(false);
 
     // --- 🔐 SECURITY STATES ---
     const [isLocked, setIsLocked] = useState(true);
@@ -101,8 +104,12 @@ export default function SettingsPage() {
             });
         }
 
-        // 2. Fetch Stores
-        const { data: storesData } = await supabase.from("stores").select("*").order("is_main_store", { ascending: false });
+        // 2. Fetch only THIS owner's Stores
+        const { data: storesData } = await supabase
+            .from("stores")
+            .select("*")
+            .eq("owner_id", user.id)
+            .order("is_main_store", { ascending: false });
         if (storesData) setStores(storesData);
 
         setLoading(false);
@@ -145,10 +152,14 @@ export default function SettingsPage() {
     const handleAddStore = async () => {
         if (!newStoreName) return alert("Store Name is required");
         setSaving(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setSaving(false); return; }
+
         const { error } = await supabase.from("stores").insert([{
             name: newStoreName,
             location: newStoreLocation,
-            is_main_store: false
+            is_main_store: false,
+            owner_id: user.id   // ← Critical: link store to this owner
         }]);
 
         if (error) alert("Error adding store: " + error.message);
@@ -170,6 +181,35 @@ export default function SettingsPage() {
         const { error } = await supabase.from("stores").delete().eq("id", id);
         if (error) alert(error.message);
         else fetchData();
+    };
+
+    // 🔥 EDIT STORE
+    const openEditStore = (store: any) => {
+        setEditingStore(store);
+        setEditStoreForm({
+            name: store.name || "",
+            location: store.location || "",
+            upi_id: store.upi_id || "",
+            razorpay_key_id: store.razorpay_key_id || "",
+        });
+    };
+
+    const handleEditStore = async () => {
+        if (!editingStore) return;
+        setEditSaving(true);
+        const { error } = await supabase.from("stores").update({
+            name: editStoreForm.name,
+            location: editStoreForm.location,
+            upi_id: editStoreForm.upi_id || null,
+            razorpay_key_id: editStoreForm.razorpay_key_id || null,
+        }).eq("id", editingStore.id);
+
+        if (error) alert("Error: " + error.message);
+        else {
+            setEditingStore(null);
+            fetchData();
+        }
+        setEditSaving(false);
     };
 
     // --- Payment & Utils ---
@@ -304,6 +344,10 @@ export default function SettingsPage() {
                                             Switch
                                         </button>
                                     )}
+                                    {/* Edit button — always visible */}
+                                    <button onClick={() => openEditStore(store)} className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all">
+                                        <Edit2 size={16} />
+                                    </button>
                                     {!store.is_main_store && (
                                         <button onClick={() => handleDeleteStore(store.id, store.is_main_store)} className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
                                             <Trash2 size={16} />
@@ -557,6 +601,44 @@ export default function SettingsPage() {
 
                             <button onClick={handleAddStore} disabled={saving} className="w-full bg-orange-600 hover:bg-orange-500 py-4 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 text-white shadow-lg shadow-orange-900/20 mt-2">
                                 {saving ? <Loader2 className="animate-spin" /> : "CREATE STORE"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✏️ EDIT STORE MODAL */}
+            {editingStore && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                        <button onClick={() => setEditingStore(null)} className="absolute top-4 right-4 text-slate-500 hover:text-white bg-slate-800 p-2 rounded-full"><X size={18} /></button>
+                        <h3 className="text-xl font-black italic uppercase mb-6 text-white flex items-center gap-2">
+                            <Edit2 className="text-blue-400" /> Edit Store
+                        </h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Store Name</label>
+                                <input type="text" value={editStoreForm.name} onChange={(e) => setEditStoreForm({ ...editStoreForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-white font-bold text-sm outline-none focus:border-blue-500 transition-all" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Location</label>
+                                <input type="text" placeholder="e.g. MG Road, Jaipur" value={editStoreForm.location} onChange={(e) => setEditStoreForm({ ...editStoreForm, location: e.target.value })} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-white text-sm outline-none focus:border-blue-500 transition-all" />
+                            </div>
+                            <div className="border-t border-slate-800 pt-4">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase mb-3 flex items-center gap-1"><QrCode size={10} /> Payment Settings <span className="text-slate-600 normal-case font-normal ml-1">(Optional)</span></p>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-600 uppercase ml-2">UPI ID <span className="text-green-400">(this store only)</span></label>
+                                        <input type="text" placeholder="shopname@ybl" value={editStoreForm.upi_id} onChange={(e) => setEditStoreForm({ ...editStoreForm, upi_id: e.target.value })} className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-green-400 font-bold text-sm outline-none focus:border-green-500 transition-all" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-600 uppercase ml-2">Razorpay Key ID <span className="text-blue-400">(this store only)</span></label>
+                                        <input type="text" placeholder="rzp_live_xxxxxxxx" value={editStoreForm.razorpay_key_id} onChange={(e) => setEditStoreForm({ ...editStoreForm, razorpay_key_id: e.target.value })} className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-blue-400 font-mono text-[11px] outline-none focus:border-blue-500 transition-all" />
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={handleEditStore} disabled={editSaving} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 text-white shadow-lg shadow-blue-900/20 mt-2">
+                                {editSaving ? <Loader2 className="animate-spin" size={16} /> : <><Save size={14} /> SAVE CHANGES</>}
                             </button>
                         </div>
                     </div>

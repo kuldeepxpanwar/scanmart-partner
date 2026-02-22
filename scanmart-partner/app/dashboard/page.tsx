@@ -105,8 +105,8 @@ export default function DashboardHome() {
     setLoading(true);
 
     try {
-      // Fetch ALL active staff — admin may have store_id=NULL (created via Owner Setup)
-      // bcrypt handles the security, store_id filter only breaks login for owners
+      // Fetch ALL active staff — bcrypt handles auth
+      // Admin (store_id=null) → any store, Regular staff → must match activeStoreId
       const { data: staffList, error } = await supabase
         .from("staff")
         .select("*")
@@ -117,8 +117,12 @@ export default function DashboardHome() {
       let matchedStaff: any = null;
       for (const member of (staffList || [])) {
         if (member.pin_code && await verifyPin(pin, member.pin_code)) {
-          matchedStaff = member;
-          break;
+          const isAdmin = member.role === 'admin' && !member.store_id;
+          const belongsToStore = member.store_id === activeStoreId;
+          if (isAdmin || belongsToStore) {
+            matchedStaff = member;
+            break;
+          }
         }
       }
 

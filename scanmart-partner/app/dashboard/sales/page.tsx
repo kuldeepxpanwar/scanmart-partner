@@ -149,8 +149,8 @@ export default function SalesPage() {
     setLoginLoading(true);
 
     try {
-      // Fetch ALL active staff — no store_id filter because admin may have store_id=NULL (created via Owner Setup)
-      // Security is provided by bcrypt PIN comparison, not store_id filtering
+      // Fetch ALL active staff — bcrypt handles auth security
+      // Staff access is then scoped: admin (store_id=null) → any store, others → must match activeStoreId
       const { data: staffList, error } = await supabase
         .from("staff")
         .select("*")
@@ -158,12 +158,18 @@ export default function SalesPage() {
 
       if (error) throw error;
 
-      // Find matching staff by comparing PIN client-side
+      // Find matching staff by PIN
       let matchedStaff: any = null;
       for (const member of (staffList || [])) {
         if (member.pin_code && await verifyPin(pin, member.pin_code)) {
-          matchedStaff = member;
-          break;
+          // Admin/owner (null store_id) can access any store
+          // Regular staff must belong to the active store
+          const isAdmin = member.role === 'admin' && !member.store_id;
+          const belongsToStore = member.store_id === activeStoreId;
+          if (isAdmin || belongsToStore) {
+            matchedStaff = member;
+            break;
+          }
         }
       }
 
