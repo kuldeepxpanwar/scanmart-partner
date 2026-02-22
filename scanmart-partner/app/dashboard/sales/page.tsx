@@ -328,16 +328,38 @@ export default function SalesPage() {
       });
 
       const invoiceNumber = generateInvoiceNumber();
-      const { data: saleData, error: saleError } = await supabase.from("sales").insert([{
+
+      // ── Try inserting with profit+GST columns (needs SQL setup) ──
+      // If columns missing → gracefully retry without them
+      let saleData: any = null;
+      let saleError: any = null;
+
+      const baseSalePayload: any = {
         total_amount: Number(finalTotal.toFixed(2)),
         customer_id: customerId,
         payment_method: paymentMethod,
         total_savings: Number(totalSavings.toFixed(2)) || 0,
         staff_id: currentStaff?.id,
         store_id: activeStoreId,
-        invoice_number: invoiceNumber,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        // invoice_number stored UI-only (column needs SQL: ALTER TABLE sales ADD COLUMN IF NOT EXISTS invoice_number TEXT)
+      };
+
+      // First: try with profit + GST
+      const { data: sd1, error: se1 } = await supabase.from("sales").insert([{
+        ...baseSalePayload,
+        total_profit: Number(totalProfit.toFixed(2)),
+        total_gst: Number(totalGst.toFixed(2)),
       }]).select('id').single();
+
+      if (se1 && (se1.message?.includes("total_profit") || se1.message?.includes("total_gst") || se1.message?.includes("schema cache"))) {
+        // Columns not created yet → retry without profit/GST
+        console.warn("[Checkout] Profit/GST columns missing, retrying without them. Run SQL to enable.");
+        const { data: sd2, error: se2 } = await supabase.from("sales").insert([baseSalePayload]).select('id').single();
+        saleData = sd2; saleError = se2;
+      } else {
+        saleData = sd1; saleError = se1;
+      }
 
 
       if (saleError) throw saleError;

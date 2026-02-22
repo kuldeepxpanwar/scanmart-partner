@@ -2,12 +2,14 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell
 } from "recharts";
 import {
   TrendingUp, IndianRupee, Calendar, ShoppingBag, Percent, Wallet,
-  AlertTriangle, Package, Users, Trophy, FileText, Tag, Clock
+  AlertTriangle, Package, Users, Trophy, FileText, Tag, Clock, Download
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // ─────────────────────────────────────────────────────────────
 //  NOTE: For Net Profit & GST to show correctly, run this SQL
@@ -31,7 +33,8 @@ export default function AnalyticsPage() {
   const [staffData, setStaffData] = useState<any[]>([]);
   const [deadStockData, setDeadStockData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("month");
+  const [filter, setFilter] = useState("month"); // default: past 30 days
+  const [exporting, setExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "staff" | "gst">("overview");
   const [isMounted, setIsMounted] = useState(false);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
@@ -175,6 +178,120 @@ export default function AnalyticsPage() {
     }
   };
 
+  // ─── Export: PDF ─────────────────────────────────────────────
+  const exportPDF = () => {
+    setExporting(true);
+    try {
+      const doc = new jsPDF();
+      const filterLabel: Record<string, string> = {
+        today: "Today", week: "Past 7 Days", month: "Past 30 Days", quarter: "Past 90 Days", all: "All Time"
+      };
+      const now = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+      // Header
+      doc.setFillColor(2, 6, 23);
+      doc.rect(0, 0, 210, 30, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18); doc.setFont("helvetica", "bold");
+      doc.text("ScanMart Analytics Report", 14, 14);
+      doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      doc.text(`Period: ${filterLabel[filter] || filter}   |   Generated: ${now}`, 14, 22);
+
+      // KPI Summary
+      doc.setTextColor(30, 30, 30);
+      doc.setFontSize(13); doc.setFont("helvetica", "bold");
+      doc.text("Business Summary", 14, 42);
+      autoTable(doc, {
+        startY: 46,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Gross Revenue", `Rs. ${stats.totalRevenue.toLocaleString()}`],
+          ["Total Orders", String(stats.totalSales)],
+          ["Avg Order Value", `Rs. ${avgOrderValue}`],
+          ["Customer Savings", `Rs. ${stats.totalSavings.toLocaleString()}`],
+          ["Net Profit", hasProfit ? `Rs. ${stats.totalProfit.toLocaleString()} (${profitMargin}%)` : "SQL setup required"],
+          ["GST Collected", hasProfit ? `Rs. ${stats.totalTax.toLocaleString()}` : "SQL setup required"],
+          ["Low Stock Items", String(stats.lowStockCount)],
+        ],
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [59, 130, 246] },
+        alternateRowStyles: { fillColor: [240, 245, 255] },
+      });
+
+      // Top Products
+      if (topProducts.length > 0) {
+        const y = (doc as any).lastAutoTable.finalY + 12;
+        doc.setFontSize(13); doc.setFont("helvetica", "bold");
+        doc.text("Top Selling Products", 14, y);
+        autoTable(doc, {
+          startY: y + 4,
+          head: [["#", "Product", "Units Sold", "Revenue"]],
+          body: topProducts.map((p, i) => [
+            String(i + 1), p.name, String(p.qty), `Rs. ${p.revenue.toLocaleString()}`
+          ]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [16, 185, 129] },
+        });
+      }
+
+      // Staff
+      if (staffData.length > 0) {
+        const y2 = (doc as any).lastAutoTable.finalY + 12;
+        doc.setFontSize(13); doc.setFont("helvetica", "bold");
+        doc.text("Staff Performance", 14, y2);
+        autoTable(doc, {
+          startY: y2 + 4,
+          head: [["#", "Staff Name", "Bills", "Revenue Generated"]],
+          body: staffData.map((s, i) => [
+            String(i + 1), s.name, String(s.sales), `Rs. ${s.revenue.toLocaleString()}`
+          ]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [139, 92, 246] },
+        });
+      }
+
+      // Daily trend
+      if (dailyData.length > 0) {
+        const y3 = (doc as any).lastAutoTable.finalY + 12;
+        doc.addPage();
+        doc.setFontSize(13); doc.setFont("helvetica", "bold");
+        doc.text("Daily Revenue Trend", 14, 20);
+        autoTable(doc, {
+          startY: 24,
+          head: [["Date", "Revenue (Rs.)"]],
+          body: dailyData.map(d => [d.date, d.revenue.toFixed(2)]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [245, 158, 11] },
+        });
+      }
+
+      doc.save(`ScanMart_Analytics_${filter}_${now.replace(/ /g, "_")}.pdf`);
+    } catch (e) { console.error("PDF export error", e); }
+    setExporting(false);
+  };
+
+  // ─── Export: CSV ─────────────────────────────────────────────
+  const exportCSV = () => {
+    const rows = [
+      ["Date", "Revenue (Rs.)"],
+      ...dailyData.map(d => [d.date, d.revenue.toFixed(2)]),
+      ["", ""],
+      ["Metric", "Value"],
+      ["Gross Revenue", stats.totalRevenue.toFixed(2)],
+      ["Total Orders", stats.totalSales],
+      ["Avg Order Value", avgOrderValue],
+      ["Customer Savings", stats.totalSavings.toFixed(2)],
+      ["Net Profit", hasProfit ? stats.totalProfit.toFixed(2) : "N/A"],
+      ["GST Collected", hasProfit ? stats.totalTax.toFixed(2) : "N/A"],
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `ScanMart_Analytics_${filter}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const profitMargin = stats.totalRevenue > 0
     ? ((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1) : "0.0";
   const avgOrderValue = stats.totalSales > 0
@@ -212,6 +329,25 @@ export default function AnalyticsPage() {
               <option value="quarter">Past 90 Days</option>
               <option value="all">All Time</option>
             </select>
+          </div>
+
+          {/* Export Dropdown */}
+          <div className="relative group">
+            <button
+              disabled={exporting || loading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all">
+              <Download size={14} /> {exporting ? "Exporting..." : "Download"}
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-44 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <button onClick={exportPDF}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold hover:bg-slate-800 text-red-400 transition-colors">
+                <FileText size={14} /> Download PDF
+              </button>
+              <button onClick={exportCSV}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold hover:bg-slate-800 text-green-400 transition-colors">
+                <Download size={14} /> Download CSV
+              </button>
+            </div>
           </div>
         </div>
       </div>
