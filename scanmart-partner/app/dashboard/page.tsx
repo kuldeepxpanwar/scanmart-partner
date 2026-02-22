@@ -130,8 +130,8 @@ export default function DashboardHome() {
         if (!(await verifyPin(pin, member.pin_code))) continue;
 
         const isOwnerAdmin = member.role === 'admin' &&
-          (!member.store_id || ownerStoreIds.includes(member.store_id));
-        const isStoreStaff = member.store_id === activeStoreId;
+          (ownerStoreIds.length === 0 || !member.store_id || ownerStoreIds.includes(member.store_id));
+        const isStoreStaff = !!(activeStoreId && member.store_id && member.store_id === activeStoreId);
 
         if (isOwnerAdmin || isStoreStaff) {
           matchedStaff = member;

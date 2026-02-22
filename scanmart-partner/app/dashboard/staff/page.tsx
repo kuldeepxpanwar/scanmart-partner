@@ -141,8 +141,9 @@ export default function StaffPage() {
       if (!ok) continue;
       // Admin scoped to owner's stores; manager must match active store
       const isOwnerAdmin = member.role === 'admin' &&
-        (!member.store_id || ownerStoreIds.includes(member.store_id));
-      const isStoreManager = member.role === 'manager' && member.store_id === activeStoreId;
+        (ownerStoreIds.length === 0 || !member.store_id || ownerStoreIds.includes(member.store_id));
+      const isStoreManager = member.role === 'manager' &&
+        !!(activeStoreId && member.store_id && member.store_id === activeStoreId);
       if (isOwnerAdmin || isStoreManager) { matched = member; break; }
     }
 

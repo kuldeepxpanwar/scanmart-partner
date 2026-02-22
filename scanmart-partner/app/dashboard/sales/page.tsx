@@ -173,9 +173,12 @@ export default function SalesPage() {
         if (!member.pin_code) continue;
         if (!(await verifyPin(pin, member.pin_code))) continue;
 
+        // Admin: if ownerStoreIds loaded → must be in owner's stores
+        //        if ownerStoreIds empty (stores.owner_id not set in DB yet) → allow any admin (trust bcrypt)
         const isOwnerAdmin = member.role === 'admin' &&
-          (!member.store_id || ownerStoreIds.includes(member.store_id));
-        const isStoreStaff = member.store_id === activeStoreId;
+          (ownerStoreIds.length === 0 || !member.store_id || ownerStoreIds.includes(member.store_id));
+        // Staff/Manager: must match activeStoreId exactly (both must be non-null)
+        const isStoreStaff = !!(activeStoreId && member.store_id && member.store_id === activeStoreId);
 
         if (isOwnerAdmin || isStoreStaff) {
           matchedStaff = member;
