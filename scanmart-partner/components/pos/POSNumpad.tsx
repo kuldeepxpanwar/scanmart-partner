@@ -21,7 +21,8 @@ export default function POSNumpad({
     setIsExisting,
     setName
 }: POSNumpadProps) {
-    const numpadKeys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', 'C', '<'];
+    // Standard calculator layout: 7,8,9 / 4,5,6 / 1,2,3 / C,0,⌫
+    const numpadKeys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'];
 
     const handleNumpad = (val: string) => {
         if (numpadTarget === 'mobile') {
@@ -46,15 +47,15 @@ export default function POSNumpad({
     };
 
     return (
-        <div className="p-3 grid grid-cols-4 gap-2 flex-shrink-0">
+        <div className="p-3 grid grid-cols-3 gap-2 flex-shrink-0">
             {numpadKeys.map(k => (
                 <button
                     key={k}
                     onClick={() => handleNumpad(k)}
-                    className={`py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 shadow-sm 
+                    className={`py-4 rounded-xl font-black text-base transition-all active:scale-95 shadow-sm
             ${k === 'C' ? 'bg-red-600 text-white hover:bg-red-500' :
                             k === '<' ? 'bg-orange-500 text-white hover:bg-orange-400' :
-                                'bg-white hover:bg-blue-600 hover:text-white text-gray-700 border border-gray-200'
+                                'bg-white hover:bg-blue-600 hover:text-white text-gray-800 border border-gray-200'
                         }`}
                 >
                     {k === '<' ? '⌫' : k}

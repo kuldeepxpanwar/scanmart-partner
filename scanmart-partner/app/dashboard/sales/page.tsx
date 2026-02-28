@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, X, Camera, Lock, LogOut, RotateCcw } from "lucide-react";
+import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, X, Camera, Lock, LogOut, RotateCcw, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 
 // --- MODULAR IMPORTS ---
 import { useCart } from "@/hooks/useCart";
@@ -58,6 +58,7 @@ export default function SalesPage() {
   } = useCart(products);
 
   const [showHeldBills, setShowHeldBills] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const generateInvoiceNumber = () => {
     const date = new Date();
@@ -482,8 +483,18 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col bg-white border-r border-gray-300">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Sidebar Collapse Toggle Button */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-[#1a237e] text-white p-1 rounded-r-lg shadow-lg hover:bg-blue-700 transition-all"
+          style={{ left: sidebarCollapsed ? '0px' : 'calc(58% - 12px)' }}
+          title={sidebarCollapsed ? 'Show Cart' : 'Collapse Cart'}
+        >
+          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
+        <div className={`flex flex-col bg-white border-r border-gray-300 transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden opacity-0' : 'flex-1'}`}>
           <div className="bg-[#1a237e] p-2 flex gap-2 items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-300" size={14} />
@@ -516,6 +527,28 @@ export default function SalesPage() {
             updateQuantity={updateQuantity}
             removeFromCart={removeFromCart}
           />
+
+          {/* ⚡ Quick Products Grid — cart empty hone par dikhao */}
+          {cart.length === 0 && !searchTerm && (
+            <div className="flex-1 overflow-y-auto p-3">
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                <Zap size={10} className="text-yellow-500" /> Quick Add — Top Products
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {products.slice(0, 12).map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => addToCart(p)}
+                    className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-xl p-2 text-left transition-all active:scale-95 group"
+                  >
+                    <p className="text-[10px] font-black text-gray-800 truncate group-hover:text-blue-700 leading-tight">{p.name}</p>
+                    <p className="text-[11px] font-black text-blue-600 mt-1">₹{p.price}</p>
+                    <p className="text-[8px] text-gray-400">Stock: {p.stock}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* BUG 4 FIX: Dropdown ab search bar ke relative position mein dikhtaa hai */}
           {searchTerm && (
             <div className="absolute top-[4.5rem] left-2 right-2 bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto">
@@ -540,7 +573,7 @@ export default function SalesPage() {
           </div>
         </div>
 
-        <div className="w-[42%] flex flex-col bg-[#f8fafc] border-l border-gray-200">
+        <div className={`flex flex-col bg-[#f8fafc] border-l border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'flex-1' : 'w-[42%]'}`}>
           <div className="p-3 bg-white border-b border-gray-200">
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Mobile Number:</p>
             <div
