@@ -4,33 +4,28 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
-  LayoutDashboard,
-  Package,
-  BarChart3,
-  Users,
-  Settings,
-  Truck,
-  LogOut,
-  Zap,
-  ShoppingCart,
-  ScanBarcode,
-  Shield,
-  RefreshCcw,
-  RotateCcw,
-  FileText,
-  Sparkles
+  LayoutDashboard, Package, BarChart3, Users, Settings,
+  Truck, LogOut, Zap, ShoppingCart, ScanBarcode, Shield,
+  RefreshCcw, RotateCcw, FileText, Sparkles, ChevronRight, ChevronLeft, Menu
 } from "lucide-react";
-// 🔥 NEW IMPORT
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
 
+  // Auto-collapse on billing page, expand on others
+  const isBillingPage = pathname === "/dashboard/sales";
+  const [collapsed, setCollapsed] = useState(isBillingPage);
+
+  // Sync collapse state when route changes
+  useEffect(() => {
+    setCollapsed(isBillingPage);
+  }, [isBillingPage]);
+
   // --- 🔐 ROLE CHECK LOGIC ---
   useEffect(() => {
     const checkRole = async () => {
-      // Legacy cleanup
       if (typeof window !== 'undefined') {
         const legacyLocal = localStorage.getItem("active_staff_id");
         if (legacyLocal) {
@@ -38,27 +33,12 @@ export default function Sidebar() {
           localStorage.removeItem("active_staff_id");
         }
       }
-
       const storedStaffId = typeof window !== 'undefined' ? sessionStorage.getItem("active_staff_id") : null;
-
       if (storedStaffId) {
-        // ✅ Check sessionStorage cache first — avoid DB call on every page nav
         const cachedRole = sessionStorage.getItem("active_staff_role");
-        if (cachedRole) {
-          setUserRole(cachedRole);
-          return;
-        }
-        // Cache miss — fetch from DB once
-        const { data } = await supabase
-          .from("staff")
-          .select("role")
-          .eq("id", storedStaffId)
-          .single();
-
-        if (data) {
-          setUserRole(data.role);
-          sessionStorage.setItem("active_staff_role", data.role);
-        }
+        if (cachedRole) { setUserRole(cachedRole); return; }
+        const { data } = await supabase.from("staff").select("role").eq("id", storedStaffId).single();
+        if (data) { setUserRole(data.role); sessionStorage.setItem("active_staff_role", data.role); }
       } else {
         setUserRole("staff");
       }
@@ -66,7 +46,6 @@ export default function Sidebar() {
     checkRole();
   }, [pathname]);
 
-  // 🔄 Switch User Function — also clears cached role
   const handleSwitchUser = () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem("active_staff_id");
@@ -75,12 +54,9 @@ export default function Sidebar() {
     }
   };
 
-  // 🚪 Log Out Function
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Logout Error:", error.message);
-    } else {
+    if (!error) {
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem("active_staff_id");
         localStorage.removeItem("active_staff_id");
@@ -90,7 +66,6 @@ export default function Sidebar() {
     }
   };
 
-  // --- 📋 NAVIGATION LOGIC ---
   const allNavItems = [
     { label: "Overview", icon: <LayoutDashboard size={20} />, href: "/dashboard", roles: ["admin", "manager", "staff"] },
     { label: "Billing (Sales)", icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
@@ -111,74 +86,106 @@ export default function Sidebar() {
   );
 
   return (
-    <aside className="w-64 bg-[#020617] border-r border-slate-800 flex flex-col h-screen sticky top-0 z-40">
-      {/* --- Logo Section --- */}
-      <div className="p-6 flex items-center gap-3">
-        <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
-          <Zap size={22} className="text-white fill-white" />
+    <aside
+      className={`relative flex flex-col h-screen sticky top-0 z-40 bg-[#020617] border-r border-slate-800 transition-all duration-300 ease-in-out ${collapsed ? "w-[64px]" : "w-64"}`}
+    >
+      {/* --- Logo --- */}
+      <div className={`flex items-center h-[72px] flex-shrink-0 ${collapsed ? "justify-center px-2" : "gap-3 px-6"}`}>
+        <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20 flex-shrink-0">
+          <Zap size={20} className="text-white fill-white" />
         </div>
-        <span className="text-xl font-bold text-white tracking-tight">
-          ScanMart<span className="text-blue-500">.Dash</span>
-        </span>
+        {!collapsed && (
+          <span className="text-lg font-bold text-white tracking-tight whitespace-nowrap overflow-hidden">
+            ScanMart<span className="text-blue-500">.Dash</span>
+          </span>
+        )}
       </div>
 
-      {/* --- User Role Tag --- */}
-      <div className="px-6 mb-4">
-        <div className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md w-fit ${userRole === 'admin' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-blue-500/10 text-blue-500'}`}>
-          {userRole || "Checking..."} Mode
+      {/* --- Role Tag --- */}
+      {!collapsed && (
+        <div className="px-6 mb-3">
+          <div className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md w-fit ${userRole === 'admin' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-blue-500/10 text-blue-500'}`}>
+            {userRole || "..."} Mode
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* 🔥 NEW: Store Switcher Added Here */}
-      <div className="px-4 mb-4">
-      </div>
+      {/* --- Collapse Toggle Button --- */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="absolute -right-3 top-[76px] z-50 bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-blue-600 hover:border-blue-600 w-6 h-6 rounded-full flex items-center justify-center transition-all shadow-md"
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+      </button>
 
-      {/* --- Navigation Links --- */}
-      <nav className="flex-1 space-y-1 px-4 overflow-y-auto custom-scrollbar">
+      {/* --- Nav Links --- */}
+      <nav className="flex-1 space-y-1 px-2 overflow-y-auto overflow-x-hidden custom-scrollbar">
         {filteredNavItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-                : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              title={collapsed ? item.label : undefined}
+              className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${collapsed ? "justify-center" : ""
+                } ${isActive
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
                 }`}
             >
-              <span className={`${isActive ? "text-white" : "group-hover:text-blue-400 transition-colors"}`}>
+              <span className={`flex-shrink-0 ${isActive ? "text-white" : "group-hover:text-blue-400 transition-colors"}`}>
                 {item.icon}
               </span>
-              <span className="font-medium text-sm">{item.label}</span>
-              {isActive && (
-                <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+              {!collapsed && (
+                <span className="font-medium text-sm whitespace-nowrap">{item.label}</span>
+              )}
+              {isActive && !collapsed && (
+                <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full animate-pulse flex-shrink-0" />
+              )}
+              {/* Tooltip when collapsed */}
+              {collapsed && (
+                <div className="absolute left-14 bg-slate-900 border border-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                  {item.label}
+                  <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-slate-900 border-l border-b border-slate-700 rotate-45" />
+                </div>
               )}
             </Link>
           );
         })}
       </nav>
 
-      {/* --- Footer: Actions --- */}
-      <div className="p-4 border-t border-slate-800 space-y-2">
-
-        {/* 🔄 Switch User Button */}
+      {/* --- Footer --- */}
+      <div className={`border-t border-slate-800 space-y-1 p-2 flex-shrink-0`}>
+        {/* Switch User */}
         <button
           onClick={handleSwitchUser}
-          className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-all group"
+          title={collapsed ? "Switch User" : undefined}
+          className={`flex items-center gap-3 px-3 py-3 w-full text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-all group relative ${collapsed ? "justify-center" : ""}`}
         >
-          <RefreshCcw size={20} className="group-hover:rotate-180 transition-transform duration-500" />
-          <span className="font-medium text-sm">Switch User</span>
+          <RefreshCcw size={20} className="group-hover:rotate-180 transition-transform duration-500 flex-shrink-0" />
+          {!collapsed && <span className="font-medium text-sm">Switch User</span>}
+          {collapsed && (
+            <div className="absolute left-14 bg-slate-900 border border-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+              Switch User
+            </div>
+          )}
         </button>
 
-        {/* 🚪 Log Out Button */}
+        {/* Sign Out */}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all group"
+          title={collapsed ? "Sign Out" : undefined}
+          className={`flex items-center gap-3 px-3 py-3 w-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all group relative ${collapsed ? "justify-center" : ""}`}
         >
-          <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
-          <span className="font-medium text-sm">Sign Out Shop</span>
+          <LogOut size={20} className="group-hover:-translate-x-1 transition-transform flex-shrink-0" />
+          {!collapsed && <span className="font-medium text-sm">Sign Out Shop</span>}
+          {collapsed && (
+            <div className="absolute left-14 bg-slate-900 border border-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+              Sign Out Shop
+            </div>
+          )}
         </button>
-
       </div>
     </aside>
   );
