@@ -87,6 +87,7 @@ export default function ReturnsPage() {
         setFoundSales([]);
 
         try {
+            // BUG 5 FIX: inventory!fk_product → inventory:product_id (standard Supabase syntax)
             const baseQuery = () => supabase
                 .from("sales")
                 .select(`
@@ -94,7 +95,7 @@ export default function ReturnsPage() {
           customers:customer_id ( name, phone ),
           sale_items (
             id, quantity, price_at_sale, product_id,
-            inventory!fk_product ( name, id )
+            inventory:product_id ( name, id )
           )
         `)
                 .eq("store_id", activeStoreId)
@@ -134,7 +135,7 @@ export default function ReturnsPage() {
                       customers:customer_id ( name, phone ),
                       sale_items (
                         id, quantity, price_at_sale, product_id,
-                        inventory!fk_product ( name, id )
+                        inventory:product_id ( name, id )
                       )
                     `)
                     .eq("store_id", activeStoreId)

@@ -232,10 +232,21 @@ export default function SalesPage() {
     try {
       let customerId = null;
       if (phone) {
+        // BUG 3 FIX: Pehle cached `totalSpent` add kar rahe the jo galat accumulate hota tha
+        // Ab pehle DB se current value fetch karo, phir usmein add karo
+        const { data: existingCustomer } = await supabase
+          .from("customers")
+          .select("total_spent")
+          .eq("phone", phone)
+          .eq("store_id", activeStoreId)
+          .maybeSingle();
+
+        const currentSpent = Number(existingCustomer?.total_spent || 0);
+
         const { data: customer } = await supabase.from("customers").upsert({
           name: name || "Guest",
           phone,
-          total_spent: totalSpent + finalTotal,
+          total_spent: currentSpent + finalTotal,
           store_id: activeStoreId
         }, { onConflict: 'phone' }).select().maybeSingle();
         customerId = customer?.id;
@@ -295,12 +306,12 @@ export default function SalesPage() {
 
       if (saleError) throw saleError;
 
+      // BUG 2 FIX: mrp_at_sale column DB mein nahi hai — remove kiya insert se
       const saleItemsData = cart.map((item) => ({
         sale_id: saleData.id,
         product_id: item.id,
         quantity: item.quantity,
         price_at_sale: Number(item.price),
-        mrp_at_sale: Number(item.mrp || item.price)
       }));
 
       const { error: itemsInsertError } = await supabase.from("sale_items").insert(saleItemsData);
@@ -505,8 +516,9 @@ export default function SalesPage() {
             updateQuantity={updateQuantity}
             removeFromCart={removeFromCart}
           />
+          {/* BUG 4 FIX: Dropdown ab search bar ke relative position mein dikhtaa hai */}
           {searchTerm && (
-            <div className="absolute top-28 left-2 right-[42%] bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto">
+            <div className="absolute top-[4.5rem] left-2 right-2 bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto">
               {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 8).map(p => (
                 <div key={p.id} onClick={() => { addToCart(p); setSearchTerm('') }} className="px-4 py-2 border-b border-gray-100 hover:bg-blue-50 cursor-pointer flex justify-between items-center">
                   <div>

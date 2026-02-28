@@ -11,6 +11,7 @@ import QRCode from "react-qr-code";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import ForgotPinModal from "@/components/ForgotPinModal";
+import { verifyPin } from "@/lib/pin";
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -68,20 +69,21 @@ export default function SettingsPage() {
     useEffect(() => {
         fetchData();
         if (typeof window !== 'undefined') {
+            // BUG 10 FIX: Named functions use karein taaki removeEventListener kaam kare
+            const handleOnline = () => setIsOnline(true);
+            const handleOffline = () => setIsOnline(false);
             setIsOnline(navigator.onLine);
-            window.addEventListener('online', () => setIsOnline(true));
-            window.addEventListener('offline', () => setIsOnline(false));
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
             const savedPrinter = localStorage.getItem("printerType");
             const savedIP = localStorage.getItem("printerIP");
             if (savedPrinter) setPrinterType(savedPrinter);
             if (savedIP) setPrinterIP(savedIP);
+            return () => {
+                window.removeEventListener('online', handleOnline);
+                window.removeEventListener('offline', handleOffline);
+            };
         }
-        return () => {
-            if (typeof window !== 'undefined') {
-                window.removeEventListener('online', () => setIsOnline(true));
-                window.removeEventListener('offline', () => setIsOnline(false));
-            }
-        };
     }, []);
 
     const fetchData = async () => {
@@ -116,9 +118,30 @@ export default function SettingsPage() {
     };
 
     const handlePinSubmit = async () => {
-        if (pin.length < 4) return setPinError("Admin PIN is 6 digits");
-        const { data } = await supabase.from("staff").select("*").eq("role", "admin").eq("pin_code", pin).maybeSingle();
-        if (data) { setIsLocked(false); setPinError(""); }
+        if (pin.length < 4) return setPinError("PIN must be 4-6 digits");
+        // BUG 1 FIX: Pehle plain text match tha — ab verifyPin() (bcrypt) use hoga
+        //            Warna hashed PINs kabhi match nahi karte the
+        const { data: adminStaff } = await supabase
+            .from("staff")
+            .select("*")
+            .eq("role", "admin")
+            .eq("is_active", true);
+
+        if (!adminStaff || adminStaff.length === 0) {
+            setPinError("❌ No admin found");
+            return;
+        }
+
+        let matched = false;
+        for (const staff of adminStaff) {
+            if (!staff.pin_code) continue;
+            if (await verifyPin(pin, staff.pin_code)) {
+                matched = true;
+                break;
+            }
+        }
+
+        if (matched) { setIsLocked(false); setPinError(""); }
         else { setPinError("❌ Invalid Admin PIN"); setPin(""); }
     };
 

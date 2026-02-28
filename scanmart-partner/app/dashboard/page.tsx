@@ -203,7 +203,8 @@ export default function DashboardHome() {
       // ── Recent transactions ──────────────────────────────────
       let salesQ = supabase
         .from("sales")
-        .select("id, total_amount, payment_method, created_at, staff_id, customers(name)")
+        // BUG 6 FIX: customers(name) → customers:customer_id(name) for explicit FK join
+        .select("id, total_amount, payment_method, created_at, staff_id, customers:customer_id(name)")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 

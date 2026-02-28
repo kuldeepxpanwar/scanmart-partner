@@ -177,7 +177,8 @@ export default function POSReceipt({
                 </button>
             </div>
 
-            <style jsx global>{`
+            {/* BUG 9 FIX: styled-jsx App Router mein kaam nahi karta — regular <style> use karo */}
+            <style>{`
         @media print {
           body * { visibility: hidden; }
           .no-print { display: none !important; }
