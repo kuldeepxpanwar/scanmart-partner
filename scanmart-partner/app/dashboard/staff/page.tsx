@@ -30,7 +30,7 @@ export default function StaffPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Forms
-  const [newStaff, setNewStaff] = useState({ name: "", phone: "", role: "staff", pin_code: "" });
+  const [newStaff, setNewStaff] = useState({ name: "", phone: "", role: "staff", pin_code: "", employee_id: "" });
   const [ownerDetails, setOwnerDetails] = useState({ name: "", phone: "", pin_code: "" });
 
   // --- 🚀 INITIAL SYSTEM CHECK ---
@@ -212,6 +212,9 @@ export default function StaffPage() {
       return alert("❌ Permission Denied: Managers can only create Staff accounts.");
     }
 
+    // 🆔 Auto-generate Employee ID: EMP-XXXX (random 4-char alphanumeric)
+    const empId = "EMP-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
     const hashedPin = await hashPin(newStaff.pin_code);
     const { error } = await supabase.from("staff").insert([{
       name: newStaff.name,
@@ -219,14 +222,15 @@ export default function StaffPage() {
       role: newStaff.role,
       pin_code: hashedPin,
       store_id: activeStoreId,
+      employee_id: empId,
       is_active: true
     }]);
 
     if (error) alert("Error: " + error.message);
     else {
-      alert("✅ Member Added Successfully!");
+      alert(`✅ Member Added! Employee ID: ${empId}`);
       setIsAddOpen(false);
-      setNewStaff({ name: "", phone: "", role: "staff", pin_code: "" });
+      setNewStaff({ name: "", phone: "", role: "staff", pin_code: "", employee_id: "" });
       fetchStaff();
     }
   };
@@ -344,10 +348,17 @@ export default function StaffPage() {
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center text-2xl font-black text-slate-500">{staff.name.charAt(0)}</div>
                 <div><h3 className="font-bold text-white text-lg">{staff.name}</h3><p className="text-slate-500 text-xs flex items-center gap-1 font-medium"><Phone size={10} /> {staff.phone}</p></div>
               </div>
-              <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 flex justify-between items-center mb-4">
+              <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 flex justify-between items-center mb-3">
                 <div className="flex items-center gap-2"><div className="bg-slate-800 p-1.5 rounded-lg text-slate-400"><Key size={14} /></div><div><p className="text-[9px] text-slate-500 uppercase font-bold">Access PIN</p><p className="text-white font-mono font-bold tracking-widest">****</p></div></div>
                 <div className="px-2 py-1 bg-green-500/10 text-green-500 rounded text-[10px] font-bold uppercase flex items-center gap-1"><UserCheck size={10} /> Active</div>
               </div>
+              {/* 🆔 Employee ID Badge */}
+              {staff.employee_id && (
+                <div className="bg-blue-500/5 border border-blue-500/20 px-3 py-1.5 rounded-xl flex items-center justify-between mb-3">
+                  <p className="text-[9px] text-slate-500 uppercase font-bold">Employee ID</p>
+                  <p className="text-blue-400 font-mono font-black text-xs tracking-widest">{staff.employee_id}</p>
+                </div>
+              )}
 
               <button
                 onClick={() => handleDeleteStaff(staff)}
@@ -368,8 +379,8 @@ export default function StaffPage() {
             <h2 className="text-2xl font-black italic uppercase mb-1 text-white">Add <span className="text-blue-500">Member</span></h2>
             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-6">Create new staff for Current Store</p>
             <div className="space-y-4">
-              <div><label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Full Name</label><input type="text" placeholder="e.g. Rahul Sharma" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all" value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} /></div>
-              <div><label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Phone Number</label><input type="number" placeholder="e.g. 9876543210" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all" value={newStaff.phone} onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })} /></div>
+              <div><label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Full Name</label><input type="text" placeholder="e.g. Kuldeep Panwar" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all" value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} /></div>
+              <div><label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Phone Number</label><input type="tel" placeholder="91XXXXXXXXXX" maxLength={12} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all" value={newStaff.phone} onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value.replace(/\D/g, '') })} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Role</label>
