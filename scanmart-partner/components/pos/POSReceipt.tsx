@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Printer } from 'lucide-react';
+import { X, Printer, MessageCircle } from 'lucide-react';
 import QRCodeAny from 'react-qr-code';
 
 interface POSReceiptProps {
@@ -20,6 +20,67 @@ export default function POSReceipt({
     const [qrRef, setQrRef] = useState('');
     const [timeLeft, setTimeLeft] = useState(60);
     const isA4 = printMode === 'a4';
+
+    // ── WhatsApp Invoice Text Generator ──
+    const generateWhatsAppText = () => {
+        const shop = storeSettings.shop_name || 'Our Store';
+        const inv = lastSale.invoiceNumber || lastSale.id?.slice(0, 8) || '-';
+        const date = lastSale.date || '';
+        const time = lastSale.time || '';
+        const customerName = lastSale.customer?.name || 'Guest';
+        const payment = (lastSale.paymentMethod || 'CASH').toUpperCase();
+
+        // Header
+        let msg = `🧾 *${shop}*\n`;
+        if (storeSettings.shop_address) msg += `📍 ${storeSettings.shop_address}\n`;
+        if (storeSettings.shop_phone) msg += `📞 ${storeSettings.shop_phone}\n`;
+        if (storeSettings.gstin) msg += `GSTIN: ${storeSettings.gstin}\n`;
+        msg += `\n`;
+
+        // Invoice meta
+        msg += `*Invoice:* ${inv}\n`;
+        msg += `*Date:* ${date}  *Time:* ${time}\n`;
+        msg += `*Customer:* ${customerName}\n`;
+        msg += `*Payment:* ${payment}\n`;
+        msg += `\n`;
+
+        // Items
+        msg += `*─────────────────────*\n`;
+        msg += `*Item          Qty  Amt*\n`;
+        msg += `*─────────────────────*\n`;
+        lastSale.items.forEach((item: any) => {
+            const lineTotal = (Number(item.price) * item.quantity).toFixed(0);
+            const nameTrimmed = item.name.length > 14 ? item.name.slice(0, 13) + '…' : item.name.padEnd(14);
+            msg += `${nameTrimmed} x${item.quantity}  ₹${lineTotal}\n`;
+        });
+        msg += `*─────────────────────*\n`;
+
+        // Totals
+        if (lastSale.totalSavings > 0) msg += `Discount: -₹${lastSale.totalSavings.toFixed(0)}\n`;
+        msg += `\n💰 *TOTAL: ₹${Math.round(lastSale.total)}*\n`;
+        if (lastSale.paymentMethod === 'split') {
+            msg += `   Cash: ₹${Math.round(lastSale.splitCash || 0)} | UPI: ₹${Math.round(lastSale.splitUpi || 0)}\n`;
+        }
+
+        // Footer
+        msg += `\n`;
+        if (storeSettings.invoice_footer) msg += `_${storeSettings.invoice_footer}_\n`;
+        msg += `_Powered by ScanMart_ 🚀`;
+
+        return msg;
+    };
+
+    const handleWhatsAppShare = () => {
+        const text = encodeURIComponent(generateWhatsAppText());
+        const phone = lastSale.customer?.phone;
+        // If customer phone exists (10 digits), pre-fill their number
+        const cleanPhone = phone && phone !== 'N/A' ? phone.replace(/\D/g, '') : '';
+        const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone.length === 12 ? cleanPhone : '';
+        const url = waPhone
+            ? `https://wa.me/${waPhone}?text=${text}`
+            : `https://wa.me/?text=${text}`;
+        window.open(url, '_blank');
+    };
 
     const refreshQR = () => {
         const newRef = "SM" + Math.random().toString(36).substring(2, 9).toUpperCase();
@@ -296,13 +357,21 @@ export default function POSReceipt({
                     </>
                 )}
 
-                {/* ── PRINT BUTTON ── */}
-                <button
-                    onClick={() => window.print()}
-                    className="w-full bg-black text-white py-3 mt-4 font-bold no-print uppercase text-xs rounded flex items-center justify-center gap-2"
-                >
-                    <Printer size={14} /> Print Receipt
-                </button>
+                {/* ── ACTION BUTTONS ── */}
+                <div className="no-print mt-4 flex gap-2">
+                    <button
+                        onClick={() => window.print()}
+                        className="flex-1 bg-black text-white py-3 font-bold uppercase text-xs rounded flex items-center justify-center gap-2 hover:bg-gray-800 transition-all"
+                    >
+                        <Printer size={14} /> Print
+                    </button>
+                    <button
+                        onClick={handleWhatsAppShare}
+                        className="flex-1 bg-[#25D366] text-white py-3 font-bold uppercase text-xs rounded flex items-center justify-center gap-2 hover:bg-[#1ebe5d] transition-all active:scale-95"
+                    >
+                        <MessageCircle size={14} /> WhatsApp
+                    </button>
+                </div>
             </div>
 
             {/* ── PRINT CSS ── inline to override globals ── */}
