@@ -44,6 +44,7 @@ interface InventoryItem {
   supplier_id: string | null;
   buying_price: number;
   gst_rate: number;
+  discount_percent: number; // 🔥 Product-level discount
   created_at: string;
   last_sold_at: string | null;
   shop_id: string | null;
@@ -136,9 +137,10 @@ export default function InventoryPage() {
     category: "General",
     barcode: "",
     image: "",
-    supplier_id: "", // 🔥 Supplier ID in Form
+    supplier_id: "",
     buying_price: "",
     gst_rate: "18",
+    discount_percent: "0", // 🔥 Discount field
   });
   const [editItem, setEditItem] = useState<any>(null);
 
@@ -151,6 +153,7 @@ export default function InventoryPage() {
 
   // --- Filter/Sort States ---
   const [filterType, setFilterType] = useState<"all" | "top_selling" | "most_profitable" | "dead_stock" | "low_stock">("all");
+  const [deadStockSort, setDeadStockSort] = useState<"none" | "high_value" | "low_value">("none"); // 🔥 Dead stock sub-filter
   const [currentPage, setCurrentPage] = useState(1);
 
   // --- 🔄 INITIALIZATION ---
@@ -493,12 +496,18 @@ export default function InventoryPage() {
 
     switch (filterType) {
       case "low_stock": return filtered.filter(p => p.stock < 10);
-      case "dead_stock": return filtered.filter(p => {
-        if (!p.last_sold_at) return false;
-        const lastSold = new Date(p.last_sold_at);
-        const diffDays = Math.ceil((now.getTime() - lastSold.getTime()) / (1000 * 3600 * 24));
-        return diffDays > 90;
-      });
+      case "dead_stock": {
+        let dead = filtered.filter(p => {
+          if (!p.last_sold_at) return false;
+          const lastSold = new Date(p.last_sold_at);
+          const diffDays = Math.ceil((now.getTime() - lastSold.getTime()) / (1000 * 3600 * 24));
+          return diffDays > 90;
+        });
+        // 🔥 High/Low value sub-filter
+        if (deadStockSort === "high_value") dead = dead.sort((a, b) => (b.stock * b.buying_price) - (a.stock * a.buying_price));
+        if (deadStockSort === "low_value") dead = dead.sort((a, b) => (a.stock * a.buying_price) - (b.stock * b.buying_price));
+        return dead;
+      }
       case "most_profitable": return filtered.sort((a, b) => (b.price - b.buying_price) - (a.price - a.buying_price));
       case "top_selling": return filtered;
       default: return filtered;
@@ -573,9 +582,19 @@ export default function InventoryPage() {
           <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800 flex gap-1">
             <button onClick={() => setFilterType('all')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${filterType === 'all' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'}`}>All</button>
             <button onClick={() => setFilterType('most_profitable')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'most_profitable' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-green-500'}`}><DollarSign size={12} /> Profitable</button>
-            <button onClick={() => setFilterType('dead_stock')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'dead_stock' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-red-500'}`}><AlertTriangle size={12} /> Dead Stock</button>
+            <button onClick={() => { setFilterType('dead_stock'); setDeadStockSort('none'); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'dead_stock' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-red-500'}`}><AlertTriangle size={12} /> Dead Stock</button>
             <button onClick={() => setFilterType('low_stock')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'low_stock' ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-orange-500'}`}><TrendingDown size={12} /> Low Stock</button>
           </div>
+
+          {/* 🔥 Dead Stock High/Low Value Sub-Filter */}
+          {filterType === 'dead_stock' && (
+            <div className="bg-red-950/40 border border-red-800/40 p-1 rounded-lg flex gap-1">
+              <span className="text-[9px] font-bold text-red-400 uppercase px-2 flex items-center">Sort by Value:</span>
+              <button onClick={() => setDeadStockSort('none')} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${deadStockSort === 'none' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'}`}>Default</button>
+              <button onClick={() => setDeadStockSort('high_value')} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${deadStockSort === 'high_value' ? 'bg-red-600 text-white' : 'text-red-400 hover:text-white'}`}>↑ High Value</button>
+              <button onClick={() => setDeadStockSort('low_value')} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${deadStockSort === 'low_value' ? 'bg-orange-600 text-white' : 'text-orange-400 hover:text-white'}`}>↓ Low Value</button>
+            </div>
+          )}
 
           <div className="relative">
             <button
@@ -599,6 +618,28 @@ export default function InventoryPage() {
                       value={reportDateRange.start} onChange={(e) => setReportDateRange({ ...reportDateRange, start: e.target.value })} />
                     <input type="date" className="w-full bg-slate-950 border border-slate-800 rounded text-[10px] text-white p-1"
                       value={reportDateRange.end} onChange={(e) => setReportDateRange({ ...reportDateRange, end: e.target.value })} />
+                  </div>
+                  {/* 🔥 Quick Date Selectors */}
+                  <div className="flex gap-1 flex-wrap">
+                    {[
+                      { label: "Today", days: 0 },
+                      { label: "7 Days", days: 7 },
+                      { label: "30 Days", days: 30 },
+                      { label: "90 Days", days: 90 }
+                    ].map(({ label, days }) => (
+                      <button key={label} onClick={() => {
+                        const end = new Date();
+                        const start = new Date();
+                        start.setDate(end.getDate() - days);
+                        setReportDateRange({
+                          start: start.toISOString().split('T')[0],
+                          end: end.toISOString().split('T')[0]
+                        });
+                      }} className="px-2 py-0.5 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded text-[9px] font-bold uppercase transition-all">
+                        {label}
+                      </button>
+                    ))}
+                    <button onClick={() => setReportDateRange({ start: "", end: "" })} className="px-2 py-0.5 bg-slate-800 hover:bg-red-600/40 text-slate-500 rounded text-[9px] font-bold uppercase transition-all">Clear</button>
                   </div>
                 </div>
 
@@ -838,6 +879,25 @@ export default function InventoryPage() {
                     <option value="">None / Self</option>
                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
+                </div>
+              </div>
+
+              {/* 🔥 Discount Field */}
+              <div className="relative">
+                <label className="text-[10px] font-bold uppercase text-orange-400 mb-1 block flex items-center gap-1">% Discount (Optional)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="0" max="100" placeholder="0"
+                    className="w-32 bg-slate-800 p-3 rounded-xl border border-orange-500/30 outline-none focus:border-orange-500 text-orange-400 font-bold text-center"
+                    value={newItem.discount_percent}
+                    onChange={e => setNewItem({ ...newItem, discount_percent: e.target.value })}
+                  />
+                  <span className="text-slate-400 text-sm font-bold">% OFF</span>
+                  {Number(newItem.discount_percent) > 0 && newItem.price && (
+                    <span className="text-green-400 text-xs font-bold">
+                      → Sale: ₹{Math.round(Number(newItem.price) * (1 - Number(newItem.discount_percent) / 100))}
+                    </span>
+                  )}
                 </div>
               </div>
 
