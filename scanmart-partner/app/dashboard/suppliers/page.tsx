@@ -245,7 +245,7 @@ export default function SuppliersPage() {
                       className="p-2 bg-slate-800 rounded-lg text-orange-400 hover:bg-orange-600 hover:text-white transition-all" title="Khata / Credit Ledger">
                       <BookOpen size={15} />
                     </button>
-                    <button onClick={() => { setFormData({ ...supplier, id: supplier.id }); setIsEditing(true); setIsModalOpen(true); }}
+                    <button onClick={() => { setFormData({ id: supplier.id, name: supplier.name || "", contact_person: supplier.contact_person || "", phone: supplier.phone || "", email: supplier.email || "", address: supplier.address || "", gstin: supplier.gstin || "", category: supplier.category || "General", status: supplier.status || "Active" }); setIsEditing(true); setIsModalOpen(true); }}
                       className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:bg-blue-600 hover:text-white transition-all">
                       <Edit3 size={15} />
                     </button>
