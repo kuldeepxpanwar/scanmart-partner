@@ -461,6 +461,42 @@ export default function SettingsPage() {
                                 <option value="wifi">Wi-Fi / LAN (IP)</option>
                             </select>
                         </div>
+
+                        {/* Paper Type Toggle — NEW */}
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 col-span-1 md:col-span-2">
+                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-3">Paper / Receipt Type</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { val: 'thermal', label: '🧾 Thermal 80mm', desc: 'Small receipt (dukaan standard)', color: 'green' },
+                                    { val: 'a4', label: '📄 A4 Invoice', desc: 'Full GST invoice (A4 paper)', color: 'blue' },
+                                ].map(({ val, label, desc, color }) => {
+                                    const savedMode = typeof window !== 'undefined' ? localStorage.getItem('printMode') || 'thermal' : 'thermal';
+                                    const isActive = savedMode === val;
+                                    return (
+                                        <button
+                                            key={val}
+                                            onClick={() => {
+                                                if (typeof window !== 'undefined') localStorage.setItem('printMode', val);
+                                                // Force re-render by toggling a dummy state
+                                                setPrinterType(prev => prev); // triggers re-render
+                                            }}
+                                            className={`p-4 rounded-xl border-2 text-left transition-all ${isActive
+                                                ? color === 'green'
+                                                    ? 'border-green-500 bg-green-500/10'
+                                                    : 'border-blue-500 bg-blue-500/10'
+                                                : 'border-slate-700 bg-slate-900 hover:border-slate-600'
+                                                }`}
+                                        >
+                                            <p className={`text-sm font-black ${isActive ? color === 'green' ? 'text-green-400' : 'text-blue-400' : 'text-white'}`}>{label}</p>
+                                            <p className="text-[10px] text-slate-500 mt-0.5">{desc}</p>
+                                            {isActive && <p className={`text-[9px] font-bold mt-1 ${color === 'green' ? 'text-green-500' : 'text-blue-500'}`}>✓ Active</p>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[9px] text-slate-600 mt-2">Billing page pe print karne par yahi format use hoga</p>
+                        </div>
+
                     </div>
                     {printerType === 'wifi' && (
                         <div className="mt-4"><input type="text" placeholder="Enter Printer IP (e.g. 192.168.1.50)" value={printerIP} onChange={(e) => setPrinterIP(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs font-mono outline-none" /></div>

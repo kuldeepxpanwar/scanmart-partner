@@ -47,6 +47,7 @@ export default function SalesPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [isExisting, setIsExisting] = useState(false);
+  const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal');
 
   // --- CUSTOM HOOK FOR CART ---
   const {
@@ -82,6 +83,9 @@ export default function SalesPage() {
       if (Date.now() < until) setLockoutUntil(until);
       else localStorage.removeItem("pos_lockout_until");
     }
+    // Load print mode from Settings
+    const savedPrintMode = localStorage.getItem("printMode") as 'thermal' | 'a4' | null;
+    if (savedPrintMode) setPrintMode(savedPrintMode);
   }, []);
 
   useEffect(() => {
@@ -756,6 +760,7 @@ export default function SalesPage() {
           storeSettings={storeSettings}
           paymentMethod={paymentMethod}
           setShowReceipt={setShowReceipt}
+          printMode={printMode}
         />
       )}
     </div>
