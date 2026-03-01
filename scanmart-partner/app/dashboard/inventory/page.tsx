@@ -310,6 +310,7 @@ export default function InventoryPage() {
     setNewItem({
       name: "", price: "", mrp: "", stock: "", category: "General",
       barcode: "", image: "", supplier_id: "", buying_price: "", gst_rate: "18",
+      discount_percent: "0",
     });
   };
 
