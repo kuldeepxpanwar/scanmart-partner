@@ -28,6 +28,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Paginator from "@/components/Paginator";
+import DateRangePicker from "@/components/ui/DateRangePicker";
 
 const INV_PAGE_SIZE = 20;
 
@@ -126,7 +127,8 @@ export default function InventoryPage() {
   const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }));
 
   // 🔥 Report Date Filter State
-  const [reportDateRange, setReportDateRange] = useState({ start: "", end: "" });
+  // 🔥 Report Date Filter State — now using DateRange object
+  const [reportDateRange, setReportDateRange] = useState<{ from: Date | null; to: Date | null }>({ from: null, to: null });
 
   // Form States
   const [newItem, setNewItem] = useState({
@@ -424,16 +426,18 @@ export default function InventoryPage() {
     let title = "Inventory Report";
 
     // 🔥 2. Apply Date Filter (if selected)
-    if (reportDateRange.start && reportDateRange.end) {
-      const startDate = new Date(reportDateRange.start);
-      const endDate = new Date(reportDateRange.end);
-      endDate.setHours(23, 59, 59); // Include full end day
+    if (reportDateRange.from) {
+      const startDate = new Date(reportDateRange.from);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = reportDateRange.to ? new Date(reportDateRange.to) : new Date();
+      endDate.setHours(23, 59, 59, 999); // Include full end day
 
       dataToExport = dataToExport.filter(item => {
         const itemDate = new Date(item.created_at);
         return itemDate >= startDate && itemDate <= endDate;
       });
-      title += ` (${reportDateRange.start} to ${reportDateRange.end})`;
+      const fmtDate = (d: Date) => `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+      title += ` (${fmtDate(startDate)} to ${fmtDate(endDate)})`;
     }
 
     if (type === 'low_stock') {
@@ -611,37 +615,15 @@ export default function InventoryPage() {
 
             {isReportMenuOpen && (
               <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
-                {/* 🔥 Date Range Inputs */}
-                <div className="p-3 border-b border-slate-800 space-y-2">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1"><Calendar size={10} /> Date Filter</p>
-                  <div className="flex gap-2">
-                    <input type="date" className="w-full bg-slate-950 border border-slate-800 rounded text-[10px] text-white p-1"
-                      value={reportDateRange.start} onChange={(e) => setReportDateRange({ ...reportDateRange, start: e.target.value })} />
-                    <input type="date" className="w-full bg-slate-950 border border-slate-800 rounded text-[10px] text-white p-1"
-                      value={reportDateRange.end} onChange={(e) => setReportDateRange({ ...reportDateRange, end: e.target.value })} />
-                  </div>
-                  {/* 🔥 Quick Date Selectors */}
-                  <div className="flex gap-1 flex-wrap">
-                    {[
-                      { label: "Today", days: 0 },
-                      { label: "7 Days", days: 7 },
-                      { label: "30 Days", days: 30 },
-                      { label: "90 Days", days: 90 }
-                    ].map(({ label, days }) => (
-                      <button key={label} onClick={() => {
-                        const end = new Date();
-                        const start = new Date();
-                        start.setDate(end.getDate() - days);
-                        setReportDateRange({
-                          start: start.toISOString().split('T')[0],
-                          end: end.toISOString().split('T')[0]
-                        });
-                      }} className="px-2 py-0.5 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded text-[9px] font-bold uppercase transition-all">
-                        {label}
-                      </button>
-                    ))}
-                    <button onClick={() => setReportDateRange({ start: "", end: "" })} className="px-2 py-0.5 bg-slate-800 hover:bg-red-600/40 text-slate-500 rounded text-[9px] font-bold uppercase transition-all">Clear</button>
-                  </div>
+                {/* 🔥 Custom DateRangePicker */}
+                <div className="p-3 border-b border-slate-800">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Calendar size={10} /> Date Filter</p>
+                  <DateRangePicker
+                    value={reportDateRange}
+                    onChange={setReportDateRange}
+                    placeholder="All dates"
+                    className="w-full"
+                  />
                 </div>
 
                 <button onClick={() => handleExport('csv')} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 flex items-center gap-2 text-green-500 transition-colors"><FileSpreadsheet size={14} /> CSV Export</button>
@@ -964,6 +946,25 @@ export default function InventoryPage() {
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
+              {/* 🔥 Discount Field in Edit */}
+              <div className="relative">
+                <label className="text-[10px] font-bold uppercase text-orange-400 mb-1 block">% Discount (Optional)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="0" max="100" placeholder="0"
+                    className="w-32 bg-slate-800 p-3 rounded-xl border border-orange-500/30 outline-none focus:border-orange-500 text-orange-400 font-bold text-center"
+                    value={editItem.discount_percent || "0"}
+                    onChange={e => setEditItem({ ...editItem, discount_percent: e.target.value })}
+                  />
+                  <span className="text-slate-400 text-sm font-bold">% OFF</span>
+                  {Number(editItem.discount_percent) > 0 && editItem.price && (
+                    <span className="text-green-400 text-xs font-bold">
+                      → Sale: ₹{Math.round(Number(editItem.price) * (1 - Number(editItem.discount_percent) / 100))}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <button onClick={handleUpdateItem} className="w-full bg-yellow-600 hover:bg-yellow-700 py-4 rounded-2xl font-black mt-2 transition-all">UPDATE NOW</button>
               <button onClick={() => setIsEditOpen(false)} className="w-full text-slate-500 py-2">Cancel</button>
             </div>
