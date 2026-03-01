@@ -59,6 +59,7 @@ export default function DashboardHome() {
   const [weeklyData, setWeeklyData] = useState<{ day: string; rev: number }[]>([]);
   const [lowStockItems, setLowStockItems] = useState<{ name: string; stock: number }[]>([]);
   const [expiringBatchCount, setExpiringBatchCount] = useState(0);
+  const [supplierOutstanding, setSupplierOutstanding] = useState(0);
 
   useEffect(() => {
     checkActiveSession();
@@ -205,6 +206,18 @@ export default function DashboardHome() {
         .lte("expiry_date", in30Days)
         .gt("quantity", 0);
       setExpiringBatchCount(expiringCount || 0);
+
+      // ── Supplier Outstanding Balance ──────────────────
+      const { data: creditTxData } = await supabase
+        .from("supplier_credit_transactions")
+        .select("type, amount")
+        .eq("store_id", storeId);
+      if (creditTxData) {
+        const outstanding = creditTxData.reduce((sum: number, tx: any) => {
+          return sum + (tx.type === "credit" ? Number(tx.amount) : -Number(tx.amount));
+        }, 0);
+        setSupplierOutstanding(Math.max(0, outstanding));
+      }
 
       // ── Customer count (use store_id — same as customers page) ──
       const { count: totalCustomers } = await supabase
@@ -459,6 +472,22 @@ export default function DashboardHome() {
           </div>
           <a href="/dashboard/inventory" className="text-orange-400 hover:text-orange-300 text-[10px] font-black uppercase tracking-widest flex-shrink-0 border border-orange-500/30 px-3 py-1.5 rounded-lg transition-all">
             Manage Batches →
+          </a>
+        </div>
+      )}
+
+      {/* Supplier Outstanding Alert Banner */}
+      {isAdmin && supplierOutstanding > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-red-400 font-black text-sm flex-shrink-0">
+            <AlertTriangle size={16} className="animate-pulse" />
+            ₹{supplierOutstanding.toLocaleString("en-IN")} supplier payment pending!
+          </div>
+          <div className="flex-1 text-red-300/70 text-xs font-medium">
+            Outstanding balance across suppliers. Clear dues to maintain good relations.
+          </div>
+          <a href="/dashboard/suppliers" className="text-red-400 hover:text-red-300 text-[10px] font-black uppercase tracking-widest flex-shrink-0 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all">
+            View Khata →
           </a>
         </div>
       )}
