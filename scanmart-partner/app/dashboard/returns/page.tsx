@@ -122,12 +122,22 @@ export default function ReturnsPage() {
                 if (error) throw error;
                 salesData = data || [];
             } else {
-                // Invoice search: match by sale ID prefix (invoice number not stored in DB)
-                // Support: full UUID, first 8 chars, or "INV-..." prefix (strip prefix for ID match)
+                // Invoice search — supports:
+                // 1) Full UUID  e.g. "a3b8d1b6-..."
+                // 2) First 8 chars of UUID  e.g. "a3b8d1b6"
+                // 3) Full invoice number  e.g. "INV-20260301-987056"
+                // 4) Partial invoice number suffix  e.g. "987056"
                 const raw = searchQuery.trim();
-                const idHint = raw.replace(/^INV-\d{8}-/i, "").toLowerCase();
 
-                // Fetch recent sales and filter client-side by ID prefix
+                // Helper: reconstruct invoice number the same way sales page does
+                const buildInvNo = (saleId: string, createdAt: string) => {
+                    const d = new Date(createdAt);
+                    const datePart = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+                    const idSuffix = saleId.replace(/-/g, "").slice(-6).toUpperCase();
+                    return `INV-${datePart}-${idSuffix}`;
+                };
+
+                // Fetch recent sales (higher limit for old receipts)
                 const { data: recentSales, error } = await supabase
                     .from("sales")
                     .select(`
@@ -140,19 +150,31 @@ export default function ReturnsPage() {
                     `)
                     .eq("store_id", activeStoreId)
                     .order("created_at", { ascending: false })
-                    .limit(200);
+                    .limit(500);
 
                 if (error) throw error;
 
-                // Try exact ID match first, then prefix match
-                salesData = (recentSales || []).filter((s: any) =>
-                    s.id === raw ||
-                    s.id.startsWith(idHint) ||
-                    s.id.replace(/-/g, "").startsWith(idHint.replace(/-/g, ""))
-                );
+                const rawUpper = raw.toUpperCase();
+                const rawLower = raw.toLowerCase();
+
+                salesData = (recentSales || []).filter((s: any) => {
+                    const invNo = buildInvNo(s.id, s.created_at);
+                    return (
+                        // Exact UUID match
+                        s.id === raw ||
+                        // UUID prefix (first 8 chars)
+                        s.id.toLowerCase().startsWith(rawLower) ||
+                        // Full invoice number match  e.g. INV-20260301-987056
+                        invNo === rawUpper ||
+                        // Suffix-only match  e.g. "987056"
+                        invNo.endsWith(rawUpper) ||
+                        // Partial match anywhere in invoice number
+                        invNo.includes(rawUpper)
+                    );
+                });
 
                 if (salesData.length === 0) {
-                    setSearchError(`No sale found matching "${raw}". Try searching by the first 8 characters of the Sale ID shown on the receipt.`);
+                    setSearchError(`No sale found matching "${raw}". Try the invoice number (e.g. INV-20260301-987056) or the first 8 characters of the Sale ID.`);
                     setSearching(false);
                     return;
                 }
