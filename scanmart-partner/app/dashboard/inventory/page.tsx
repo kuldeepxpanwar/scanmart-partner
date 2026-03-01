@@ -614,7 +614,7 @@ export default function InventoryPage() {
             )}
 
             {isReportMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100">
                 {/* 🔥 Custom DateRangePicker */}
                 <div className="p-3 border-b border-slate-800">
                   <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Calendar size={10} /> Date Filter</p>
