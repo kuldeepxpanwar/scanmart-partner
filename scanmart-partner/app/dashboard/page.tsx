@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { ArrowUpRight, Zap, Loader2, Calendar, IndianRupee, Wallet, ShieldCheck, Lock, TrendingUp, Users, Package, ShoppingBag } from "lucide-react";
+import { ArrowUpRight, Zap, Loader2, Calendar, IndianRupee, Wallet, ShieldCheck, Lock, TrendingUp, Users, Package, ShoppingBag, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import ForgotPinModal from "@/components/ForgotPinModal";
 import { verifyPin } from "@/lib/pin";
@@ -58,6 +58,7 @@ export default function DashboardHome() {
   const [recentSales, setRecentSales] = useState<any[]>([]);
   const [weeklyData, setWeeklyData] = useState<{ day: string; rev: number }[]>([]);
   const [lowStockItems, setLowStockItems] = useState<{ name: string; stock: number }[]>([]);
+  const [expiringBatchCount, setExpiringBatchCount] = useState(0);
 
   useEffect(() => {
     checkActiveSession();
@@ -193,6 +194,17 @@ export default function DashboardHome() {
         .select("id", { count: "exact", head: true })
         .eq("store_id", storeId)
         .lt("stock", 5);
+
+      // ── Expiring batches (within 30 days) ───────────────────
+      const today = new Date().toISOString().split('T')[0];
+      const in30Days = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0];
+      const { count: expiringCount } = await supabase
+        .from("inventory_batches")
+        .select("id", { count: "exact", head: true })
+        .eq("store_id", storeId)
+        .lte("expiry_date", in30Days)
+        .gt("quantity", 0);
+      setExpiringBatchCount(expiringCount || 0);
 
       // ── Customer count (use store_id — same as customers page) ──
       const { count: totalCustomers } = await supabase
@@ -431,6 +443,22 @@ export default function DashboardHome() {
           </div>
           <a href="/dashboard/inventory" className="text-red-400 hover:text-red-300 text-[10px] font-black uppercase tracking-widest flex-shrink-0 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all">
             Reorder →
+          </a>
+        </div>
+      )}
+
+      {/* Expiring Soon Alert Banner */}
+      {isAdmin && expiringBatchCount > 0 && (
+        <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-orange-400 font-black text-sm flex-shrink-0">
+            <AlertTriangle size={16} className="animate-pulse" />
+            {expiringBatchCount} batch{expiringBatchCount > 1 ? 'es' : ''} expiring within 30 days!
+          </div>
+          <div className="flex-1 text-orange-300/70 text-xs font-medium">
+            Review and clear expiring stock to avoid losses.
+          </div>
+          <a href="/dashboard/inventory" className="text-orange-400 hover:text-orange-300 text-[10px] font-black uppercase tracking-widest flex-shrink-0 border border-orange-500/30 px-3 py-1.5 rounded-lg transition-all">
+            Manage Batches →
           </a>
         </div>
       )}

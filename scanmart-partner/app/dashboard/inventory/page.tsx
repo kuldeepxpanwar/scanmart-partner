@@ -22,8 +22,10 @@ import {
   RotateCcw,
   ScanBarcode,
   Info,
-  Calendar, // 🔥 New Icon for Date
-  Truck // 🔥 New Icon for Supplier
+  Calendar,
+  Truck,
+  PackagePlus,
+  ShieldAlert
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -77,6 +79,17 @@ interface TransferRequest {
   dest_store_name?: string;
 }
 
+interface BatchItem {
+  id: string;
+  product_id: string;
+  store_id: string;
+  batch_number: string;
+  expiry_date: string;
+  quantity: number;
+  buying_price: number;
+  created_at: string;
+}
+
 // GST Constants
 const GST_SLABS = [
   { value: 0, label: "0% - Exempt (Milk/Bread)" },
@@ -107,6 +120,14 @@ export default function InventoryPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isTransferListOpen, setIsTransferListOpen] = useState(false);
+
+  // 🗓️ BATCH TRACKING STATE
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
+  const [batchProduct, setBatchProduct] = useState<InventoryItem | null>(null);
+  const [batches, setBatches] = useState<BatchItem[]>([]);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [newBatch, setNewBatch] = useState({ batch_number: '', expiry_date: '', quantity: '', buying_price: '' });
+  const [batchSaving, setBatchSaving] = useState(false);
 
   // Dropdown State
   const [isReportMenuOpen, setIsReportMenuOpen] = useState(false);
@@ -535,6 +556,55 @@ export default function InventoryPage() {
     return { label: "Dead Stock", color: "text-red-500 font-black animate-pulse" };
   };
 
+  // 🗓️ BATCH FUNCTIONS
+  const getExpiryStatus = (expiryDate: string) => {
+    const today = new Date();
+    const exp = new Date(expiryDate);
+    const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    if (diffDays < 0) return { label: 'Expired', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '🔴' };
+    if (diffDays <= 30) return { label: `${diffDays}d left`, color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '🟡' };
+    return { label: `${diffDays}d left`, color: 'bg-green-500/20 text-green-400 border-green-500/30', icon: '🟢' };
+  };
+
+  const openBatchManager = async (product: InventoryItem) => {
+    setBatchProduct(product);
+    setIsBatchOpen(true);
+    setBatchLoading(true);
+    const { data } = await supabase
+      .from('inventory_batches')
+      .select('*')
+      .eq('product_id', product.id)
+      .eq('store_id', activeStoreId)
+      .order('expiry_date', { ascending: true });
+    setBatches(data || []);
+    setBatchLoading(false);
+  };
+
+  const handleAddBatch = async () => {
+    if (!newBatch.batch_number || !newBatch.expiry_date || !newBatch.quantity) {
+      alert('Batch number, expiry date aur quantity required hai!');
+      return;
+    }
+    setBatchSaving(true);
+    const { data, error } = await supabase.from('inventory_batches').insert({
+      product_id: batchProduct?.id,
+      store_id: activeStoreId,
+      batch_number: newBatch.batch_number,
+      expiry_date: newBatch.expiry_date,
+      quantity: Number(newBatch.quantity),
+      buying_price: Number(newBatch.buying_price) || 0,
+    }).select().single();
+    if (error) { alert('Error: ' + error.message); }
+    else { setBatches(prev => [...prev, data].sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())); }
+    setNewBatch({ batch_number: '', expiry_date: '', quantity: '', buying_price: '' });
+    setBatchSaving(false);
+  };
+
+  const handleDeleteBatch = async (batchId: string) => {
+    await supabase.from('inventory_batches').delete().eq('id', batchId);
+    setBatches(prev => prev.filter(b => b.id !== batchId));
+  };
+
 
   return (
     <div className="p-4 md:p-8 bg-[#020617] min-h-screen text-white font-sans pb-32">
@@ -741,6 +811,7 @@ export default function InventoryPage() {
                             </button>
                           ) : (
                             <>
+                              <button onClick={() => openBatchManager(item)} className="p-2 bg-slate-800 hover:bg-orange-600 text-slate-400 hover:text-orange-300 rounded-lg transition-all" title="Manage Batches"><PackagePlus size={14} /></button>
                               <button onClick={() => { setTransferData({ ...transferData, product_id: item.id }); setIsTransferOpen(true); }} className="p-2 bg-slate-800 hover:bg-purple-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Transfer Stock"><ArrowRightLeft size={14} /></button>
                               <button onClick={() => { setEditItem(item); setIsEditOpen(true); }} className="p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all"><Edit3 size={14} /></button>
                               <button onClick={() => handleDeleteItem(item.id)} className="p-2 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all"><Trash2 size={14} /></button>
@@ -765,6 +836,89 @@ export default function InventoryPage() {
           />
         </div>
       </div>
+
+      {/* 🗓️ BATCH MANAGER MODAL */}
+      {isBatchOpen && batchProduct && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-slate-800">
+              <div>
+                <h2 className="text-lg font-black uppercase italic flex items-center gap-2 text-orange-400">
+                  <PackagePlus size={20} /> Batch Manager
+                </h2>
+                <p className="text-slate-400 text-xs font-bold mt-0.5">{batchProduct.name}</p>
+              </div>
+              <button onClick={() => setIsBatchOpen(false)} className="bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={20} /></button>
+            </div>
+
+            {/* Existing Batches */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-3">
+              <p className="text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-3">Existing Batches (FEFO Order — First Expiry First Out)</p>
+              {batchLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="animate-spin text-orange-500" size={28} /></div>
+              ) : batches.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-sm font-bold">Koi batch nahi hai — neeche add karo 👇</div>
+              ) : (
+                batches.map(batch => {
+                  const expStatus = getExpiryStatus(batch.expiry_date);
+                  return (
+                    <div key={batch.id} className={`flex justify-between items-center p-4 rounded-xl border ${expStatus.color} bg-opacity-10`}>
+                      <div>
+                        <p className="font-bold text-sm text-white">{expStatus.icon} {batch.batch_number}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Expiry: <span className="font-bold">{new Date(batch.expiry_date).toLocaleDateString('en-IN')}</span>
+                          &nbsp;•&nbsp; Qty: <span className="font-bold">{batch.quantity}</span>
+                          &nbsp;•&nbsp; Buy: ₹{batch.buying_price}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${expStatus.color}`}>{expStatus.label}</span>
+                        <button onClick={() => handleDeleteBatch(batch.id)} className="p-1.5 bg-red-500/10 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Add New Batch Form */}
+            <div className="p-6 border-t border-slate-800 bg-slate-950/50 rounded-b-[2rem]">
+              <p className="text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-3 flex items-center gap-1"><ShieldAlert size={12} /> Add New Batch</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500">Batch Number</label>
+                  <input type="text" placeholder="e.g. BATCH-A23" value={newBatch.batch_number}
+                    onChange={e => setNewBatch({ ...newBatch, batch_number: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm font-bold outline-none focus:border-orange-500 mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500">Expiry Date</label>
+                  <input type="date" value={newBatch.expiry_date}
+                    onChange={e => setNewBatch({ ...newBatch, expiry_date: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm font-bold outline-none focus:border-orange-500 mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500">Quantity</label>
+                  <input type="number" placeholder="e.g. 50" value={newBatch.quantity}
+                    onChange={e => setNewBatch({ ...newBatch, quantity: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm font-bold outline-none focus:border-orange-500 mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500">Buying Price (₹)</label>
+                  <input type="number" placeholder="e.g. 45" value={newBatch.buying_price}
+                    onChange={e => setNewBatch({ ...newBatch, buying_price: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm font-bold outline-none focus:border-orange-500 mt-1" />
+                </div>
+              </div>
+              <button onClick={handleAddBatch} disabled={batchSaving}
+                className="w-full mt-4 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
+                {batchSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add Batch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🚛 TRANSFER MODALS (Code retained for brevity - Same as before) */}
       {isTransferOpen && (
