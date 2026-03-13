@@ -157,10 +157,10 @@ export default function StickerPage() {
           <Barcode value={item.barcodeValue} width={bW} height={bH} fontSize={7} displayValue={false} />
         </div>
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 7, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.12em", color: "#888", marginBottom: 2 }}>{storeName}</p>
-          <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 13 : 10, lineHeight: 1.2, marginBottom: 3 }}>{name}</p>
-          {mrp > 0 && <p style={{ fontSize: 9, color: "#999", textDecoration: "line-through" }}>MRP ₹{mrp.toFixed(0)}</p>}
-          <p style={{ fontSize: 8, fontWeight: 700, color: "#555", marginBottom: 1 }}>Smart Price</p>
+          <p style={{ fontSize: 7, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.12em", color: "#333", marginBottom: 2 }}>{storeName}</p>
+          <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 13 : 10, lineHeight: 1.2, marginBottom: 3, color: "#000" }}>{name}</p>
+          {mrp > 0 && <p style={{ fontSize: 9, color: "#666", textDecoration: "line-through" }}>MRP ₹{mrp.toFixed(0)}</p>}
+          <p style={{ fontSize: 8, fontWeight: 700, color: "#333", marginBottom: 1 }}>Smart Price</p>
           <p style={{ fontSize: bigFont, fontWeight: 900, color: "#1b5e20", lineHeight: 1 }}>₹{price.toFixed(0)}</p>
         </div>
       </div>
