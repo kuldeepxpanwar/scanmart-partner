@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { X, Printer, MessageCircle } from 'lucide-react';
+import { X, Printer, MessageCircle, FileDown, Loader2 } from 'lucide-react';
+import jsPDF from 'jspdf';
 import QRCodeAny from 'react-qr-code';
 
 interface POSReceiptProps {
@@ -19,66 +20,115 @@ export default function POSReceipt({
 }: POSReceiptProps) {
     const [qrRef, setQrRef] = useState('');
     const [timeLeft, setTimeLeft] = useState(60);
+    const [pdfGenerating, setPdfGenerating] = useState(false);
     const isA4 = printMode === 'a4';
 
-    // ── WhatsApp Invoice Text Generator ──
-    const generateWhatsAppText = () => {
+    // ── PDF Bill Generator (jsPDF) ──
+    const generatePDF = async () => {
+        setPdfGenerating(true);
+        try {
+            const doc = new jsPDF({ unit: 'mm', format: [80, 220], orientation: 'portrait' });
+            const shop = storeSettings.shop_name || 'Our Store';
+            const inv = lastSale.invoiceNumber || lastSale.id?.slice(0, 8) || '-';
+            let y = 8;
+
+            // Header
+            doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+            doc.text(shop.toUpperCase(), 40, y, { align: 'center' }); y += 5;
+            doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+            if (storeSettings.shop_address) { doc.text(storeSettings.shop_address, 40, y, { align: 'center' }); y += 4; }
+            if (storeSettings.shop_phone) { doc.text(`Ph: ${storeSettings.shop_phone}`, 40, y, { align: 'center' }); y += 4; }
+            if (storeSettings.gstin) { doc.text(`GSTIN: ${storeSettings.gstin}`, 40, y, { align: 'center' }); y += 4; }
+
+            // Divider
+            y += 2; doc.setDrawColor(0); doc.setLineWidth(0.3);
+            doc.line(4, y, 76, y); y += 4;
+
+            // Invoice details
+            doc.setFontSize(7);
+            doc.text(`Invoice: ${inv}`, 4, y); doc.text(`Date: ${lastSale.date || ''}`, 76, y, { align: 'right' }); y += 4;
+            doc.text(`Time: ${lastSale.time || ''}`, 4, y); y += 4;
+            if (lastSale.customer?.name) { doc.text(`Customer: ${lastSale.customer.name}`, 4, y); y += 4; }
+            if (lastSale.staffName) { doc.text(`Cashier: ${lastSale.staffName}`, 4, y); y += 4; }
+
+            // Items header
+            y += 1; doc.line(4, y, 76, y); y += 4;
+            doc.setFont('helvetica', 'bold');
+            doc.text('Item', 4, y); doc.text('Qty', 50, y, { align: 'center' }); doc.text('Rate', 62, y, { align: 'right' }); doc.text('Amt', 76, y, { align: 'right' }); y += 3;
+            doc.line(4, y, 76, y); y += 4;
+
+            // Items
+            doc.setFont('helvetica', 'normal');
+            lastSale.items.forEach((item: any) => {
+                const lineTotal = (Number(item.price) * item.quantity).toFixed(0);
+                const name = item.name.length > 22 ? item.name.slice(0, 21) + '…' : item.name;
+                doc.text(name, 4, y);
+                doc.text(String(item.quantity), 50, y, { align: 'center' });
+                doc.text(Number(item.price).toFixed(0), 62, y, { align: 'right' });
+                doc.text(`${lineTotal}`, 76, y, { align: 'right' }); y += 5;
+            });
+
+            // Totals
+            doc.line(4, y, 76, y); y += 4;
+            if (lastSale.totalSavings > 0) {
+                doc.text(`Discount:`, 4, y); doc.text(`-Rs ${lastSale.totalSavings.toFixed(0)}`, 76, y, { align: 'right' }); y += 4;
+            }
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+            doc.text('TOTAL:', 4, y); doc.text(`Rs ${Math.round(lastSale.total)}`, 76, y, { align: 'right' }); y += 5;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+            doc.text(`Payment: ${(lastSale.paymentMethod || 'CASH').toUpperCase()}`, 4, y); y += 5;
+
+            // Footer
+            doc.line(4, y, 76, y); y += 4;
+            if (storeSettings.invoice_footer) { doc.text(storeSettings.invoice_footer, 40, y, { align: 'center' }); y += 4; }
+            doc.setFontSize(6); doc.text('Powered by ScanMart', 40, y, { align: 'center' });
+
+            const filename = `Bill-${inv}-${lastSale.date || 'today'}.pdf`;
+            doc.save(filename);
+        } catch (e) {
+            console.error('PDF generation failed:', e);
+            alert('PDF generation failed. Please try again.');
+        } finally {
+            setPdfGenerating(false);
+        }
+    };
+
+    // ── WhatsApp Share (rich formatted text) ──
+    const handleWhatsAppShare = () => {
         const shop = storeSettings.shop_name || 'Our Store';
         const inv = lastSale.invoiceNumber || lastSale.id?.slice(0, 8) || '-';
-        const date = lastSale.date || '';
-        const time = lastSale.time || '';
         const customerName = lastSale.customer?.name || 'Guest';
         const payment = (lastSale.paymentMethod || 'CASH').toUpperCase();
 
-        // Header
         let msg = `🧾 *${shop}*\n`;
         if (storeSettings.shop_address) msg += `📍 ${storeSettings.shop_address}\n`;
         if (storeSettings.shop_phone) msg += `📞 ${storeSettings.shop_phone}\n`;
         if (storeSettings.gstin) msg += `GSTIN: ${storeSettings.gstin}\n`;
-        msg += `\n`;
-
-        // Invoice meta
-        msg += `*Invoice:* ${inv}\n`;
-        msg += `*Date:* ${date}  *Time:* ${time}\n`;
-        msg += `*Customer:* ${customerName}\n`;
-        msg += `*Payment:* ${payment}\n`;
-        msg += `\n`;
-
-        // Items
-        msg += `*─────────────────────*\n`;
-        msg += `*Item          Qty  Amt*\n`;
+        msg += `\n*Invoice:* ${inv}  |  *Date:* ${lastSale.date || ''} ${lastSale.time || ''}\n`;
+        msg += `*Customer:* ${customerName}  |  *Payment:* ${payment}\n`;
+        msg += `\n*─────────────────────*\n`;
+        msg += `*Item               Qty   Amt*\n`;
         msg += `*─────────────────────*\n`;
         lastSale.items.forEach((item: any) => {
             const lineTotal = (Number(item.price) * item.quantity).toFixed(0);
-            const nameTrimmed = item.name.length > 14 ? item.name.slice(0, 13) + '…' : item.name.padEnd(14);
-            msg += `${nameTrimmed} x${item.quantity}  ₹${lineTotal}\n`;
+            const name = item.name.length > 18 ? item.name.slice(0, 17) + '…' : item.name.padEnd(18);
+            msg += `${name} x${item.quantity}   ₹${lineTotal}\n`;
         });
         msg += `*─────────────────────*\n`;
-
-        // Totals
-        if (lastSale.totalSavings > 0) msg += `Discount: -₹${lastSale.totalSavings.toFixed(0)}\n`;
+        if (lastSale.totalSavings > 0) msg += `💚 Discount: -₹${lastSale.totalSavings.toFixed(0)}\n`;
         msg += `\n💰 *TOTAL: ₹${Math.round(lastSale.total)}*\n`;
         if (lastSale.paymentMethod === 'split') {
-            msg += `   Cash: ₹${Math.round(lastSale.splitCash || 0)} | UPI: ₹${Math.round(lastSale.splitUpi || 0)}\n`;
+            msg += `   💵 Cash: ₹${Math.round(lastSale.splitCash || 0)} | 📱 UPI: ₹${Math.round(lastSale.splitUpi || 0)}\n`;
         }
-
-        // Footer
         msg += `\n`;
         if (storeSettings.invoice_footer) msg += `_${storeSettings.invoice_footer}_\n`;
         msg += `_Powered by ScanMart_ 🚀`;
 
-        return msg;
-    };
-
-    const handleWhatsAppShare = () => {
-        const text = encodeURIComponent(generateWhatsAppText());
+        const text = encodeURIComponent(msg);
         const phone = lastSale.customer?.phone;
-        // If customer phone exists (10 digits), pre-fill their number
         const cleanPhone = phone && phone !== 'N/A' ? phone.replace(/\D/g, '') : '';
         const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone.length === 12 ? cleanPhone : '';
-        const url = waPhone
-            ? `https://wa.me/${waPhone}?text=${text}`
-            : `https://wa.me/?text=${text}`;
+        const url = waPhone ? `https://wa.me/${waPhone}?text=${text}` : `https://wa.me/?text=${text}`;
         window.open(url, '_blank');
     };
 
@@ -364,6 +414,13 @@ export default function POSReceipt({
                         className="flex-1 bg-black text-white py-3 font-bold uppercase text-xs rounded flex items-center justify-center gap-2 hover:bg-gray-800 transition-all"
                     >
                         <Printer size={14} /> Print
+                    </button>
+                    <button
+                        onClick={generatePDF}
+                        disabled={pdfGenerating}
+                        className="flex-1 bg-blue-700 text-white py-3 font-bold uppercase text-xs rounded flex items-center justify-center gap-2 hover:bg-blue-600 transition-all active:scale-95 disabled:opacity-60"
+                    >
+                        {pdfGenerating ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} PDF
                     </button>
                     <button
                         onClick={handleWhatsAppShare}

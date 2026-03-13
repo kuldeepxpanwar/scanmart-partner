@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface POSNumpadProps {
     numpadTarget: 'mobile' | 'discount' | null;
@@ -45,6 +45,32 @@ export default function POSNumpad({
             }
         }
     };
+
+    // ⌨️ Keyboard support — desktop users can type without touching numpad
+    useEffect(() => {
+        if (!numpadTarget) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if user is typing in an input/textarea elsewhere
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+            if (e.key >= '0' && e.key <= '9') {
+                e.preventDefault();
+                handleNumpad(e.key);
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                handleNumpad('<');
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handleNumpad('C');
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [numpadTarget, phone, discountValue]);
 
     return (
         <div className="p-3 grid grid-cols-3 gap-2 flex-shrink-0">

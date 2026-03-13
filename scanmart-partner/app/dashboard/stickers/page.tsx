@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Barcode from "react-barcode";
-import { Search, Printer, Plus, Minus, X, ScanBarcode, ShoppingBag, Store } from "lucide-react";
+import { Search, Printer, Plus, Minus, X, ScanBarcode, ShoppingBag, Store, Scale, ToggleLeft, ToggleRight } from "lucide-react";
 
 export default function StickerPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -16,6 +16,12 @@ export default function StickerPage() {
   // Sticker Settings
   const [showPrice, setShowPrice] = useState(true);
   const [storeName, setStoreName] = useState("SCANMART");
+
+  // ⚖️ Weight Mode
+  const [weightMode, setWeightMode] = useState(false);
+  const [weightModal, setWeightModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [weightInput, setWeightInput] = useState("");
 
   // --- 🔄 INITIALIZATION ---
   useEffect(() => {
@@ -71,15 +77,44 @@ export default function StickerPage() {
 
   // Add Item to Print Queue
   const addToQueue = (product: any) => {
+    if (weightMode) {
+      // Weight mode: open modal to enter grams
+      setSelectedProduct(product);
+      setWeightInput("");
+      setWeightModal(true);
+      return;
+    }
     setPrintQueue((prev) => {
       const exists = prev.find((item) => item.id === product.id);
       if (exists) {
         return prev.map((item) => item.id === product.id ? { ...item, copies: item.copies + 1 } : item);
       }
-      // Generate a pseudo-barcode if one doesn't exist (using sliced ID for demo)
-      const barcodeValue = product.barcode || product.id.slice(0, 8).toUpperCase(); 
+      const barcodeValue = product.barcode || product.id.slice(0, 8).toUpperCase();
       return [...prev, { ...product, copies: 1, barcodeValue }];
     });
+  };
+
+  // ⚖️ Add weight-based item to queue
+  const addWeightItem = () => {
+    const grams = parseFloat(weightInput);
+    if (!selectedProduct || isNaN(grams) || grams <= 0) return;
+    const pricePerKg = selectedProduct.price;
+    const calculatedPrice = ((grams / 1000) * pricePerKg).toFixed(2);
+    const barcodeValue = selectedProduct.barcode || selectedProduct.id.slice(0, 8).toUpperCase();
+    const weightItem = {
+      ...selectedProduct,
+      id: selectedProduct.id + '-' + Date.now(), // unique per weight entry
+      price: calculatedPrice,
+      weightGrams: grams,
+      isWeightItem: true,
+      copies: 1,
+      barcodeValue,
+      displayName: `${selectedProduct.name} (${grams}g)`,
+    };
+    setPrintQueue(prev => [...prev, weightItem]);
+    setWeightModal(false);
+    setSelectedProduct(null);
+    setWeightInput("");
   };
 
   const updateCopies = (id: string, delta: number) => {
@@ -114,11 +149,30 @@ export default function StickerPage() {
             </h1>
             <div className="flex justify-between items-end mt-1">
                 <p className="text-xs text-slate-500">Select products to generate barcodes</p>
-                {/* 🔥 Store Indicator */}
-                <div className="flex items-center gap-1 text-[9px] font-bold text-blue-400 uppercase bg-blue-500/10 px-2 py-1 rounded">
-                    <Store size={10}/> {activeStoreId ? "Store Active" : "Loading..."}
+                <div className="flex items-center gap-2">
+                    {/* Weight Mode Toggle */}
+                    <button
+                        onClick={() => setWeightMode(w => !w)}
+                        className={`flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded transition-all ${
+                            weightMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'
+                        }`}
+                        title="Toggle weight-based pricing mode"
+                    >
+                        <Scale size={10}/>
+                        {weightMode ? <ToggleRight size={12}/> : <ToggleLeft size={12}/>}
+                        Weight
+                    </button>
+                    {/* Store Indicator */}
+                    <div className="flex items-center gap-1 text-[9px] font-bold text-blue-400 uppercase bg-blue-500/10 px-2 py-1 rounded">
+                        <Store size={10}/> {activeStoreId ? "Store Active" : "Loading..."}
+                    </div>
                 </div>
             </div>
+            {weightMode && (
+                <p className="text-[10px] text-orange-400 mt-2 bg-orange-500/10 px-2 py-1 rounded">
+                    ⚖️ Weight Mode ON — Click product to enter grams, price auto-calculates
+                </p>
+            )}
             
             <div className="mt-4 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
@@ -183,7 +237,10 @@ export default function StickerPage() {
                     {/* Sticker Preview */}
                     <div className="flex flex-col items-center text-center border-2 border-dashed border-gray-300 p-2 rounded">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{storeName}</p>
-                        <p className="font-black text-sm leading-tight my-1 line-clamp-1">{item.name}</p>
+                        <p className="font-black text-sm leading-tight my-1 line-clamp-1">{item.isWeightItem ? item.displayName : item.name}</p>
+                        {item.isWeightItem && (
+                            <p className="text-[9px] text-gray-400 font-medium">{item.weightGrams}g @ ₹{Number(selectedProduct?.price || item.price).toFixed(0)}/kg</p>
+                        )}
                         <Barcode value={item.barcodeValue} width={1.5} height={40} fontSize={12} displayValue={true} />
                         {showPrice && <p className="font-bold text-lg mt-1">₹{item.price}</p>}
                     </div>
@@ -206,7 +263,10 @@ export default function StickerPage() {
                Array(item.copies).fill(item).map((_, idx) => (
                    <div key={`${item.id}-${idx}`} className="border border-gray-300 p-2 flex flex-col items-center justify-center text-center h-[180px] break-inside-avoid page-break">
                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-1">{storeName}</p>
-                       <p className="font-black text-sm leading-tight mb-1">{item.name}</p>
+                       <p className="font-black text-sm leading-tight mb-1">{item.isWeightItem ? item.displayName : item.name}</p>
+                       {item.isWeightItem && (
+                           <p className="text-[9px] text-gray-500">{item.weightGrams}g</p>
+                       )}
                        {/* Barcode Component */}
                        <div className="scale-90 origin-center">
                            <Barcode value={item.barcodeValue} width={1.5} height={50} fontSize={14} displayValue={true} />
@@ -227,6 +287,39 @@ export default function StickerPage() {
         }
         .page-break { page-break-inside: avoid; }
       `}</style>
+
+      {/* ⚖️ Weight Input Modal */}
+      {weightModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]" onClick={() => setWeightModal(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-white mb-1">⚖️ Enter Weight</h3>
+            <p className="text-xs text-slate-400 mb-4">{selectedProduct.name} — ₹{selectedProduct.price}/kg</p>
+            
+            <input
+              type="number"
+              placeholder="Weight in grams (e.g. 1295)"
+              value={weightInput}
+              onChange={e => setWeightInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addWeightItem()}
+              autoFocus
+              className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-blue-500 text-lg font-bold"
+            />
+            
+            {weightInput && parseFloat(weightInput) > 0 && (
+              <div className="mt-3 bg-blue-600/20 border border-blue-500/30 rounded-lg p-3 text-center">
+                <p className="text-xs text-slate-400">Calculated Price</p>
+                <p className="text-2xl font-black text-white">₹{((parseFloat(weightInput) / 1000) * selectedProduct.price).toFixed(2)}</p>
+                <p className="text-[10px] text-slate-500">{weightInput}g × ₹{selectedProduct.price}/kg</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setWeightModal(false)} className="flex-1 bg-slate-700 text-white py-3 rounded-xl font-bold hover:bg-slate-600 transition-all">Cancel</button>
+              <button onClick={addWeightItem} disabled={!weightInput || parseFloat(weightInput) <= 0} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-500 transition-all disabled:opacity-40">Add Sticker</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

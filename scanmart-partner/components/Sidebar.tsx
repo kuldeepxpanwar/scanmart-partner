@@ -75,7 +75,7 @@ export default function Sidebar() {
     { label: "Analytics", icon: <BarChart3 size={20} />, href: "/dashboard/analytics", roles: ["admin", "manager"] },
     { label: "Customers", icon: <Users size={20} />, href: "/dashboard/customers", roles: ["admin", "manager"] },
     { label: "Team Access", icon: <Shield size={20} />, href: "/dashboard/staff", roles: ["admin"] },
-    { label: "Sticker Studio", icon: <ScanBarcode size={20} />, href: "/dashboard/stickers", roles: ["admin", "manager"] },
+    { label: "Sticker Studio", icon: <ScanBarcode size={20} />, href: "/dashboard/stickers", roles: ["admin", "manager", "staff"] },
     { label: "Z-Report", icon: <FileText size={20} />, href: "/dashboard/zreport", roles: ["admin", "manager"] },
     { label: "Onboarding", icon: <Sparkles size={20} />, href: "/dashboard/onboarding", roles: ["admin"] },
     { label: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", roles: ["admin"] },

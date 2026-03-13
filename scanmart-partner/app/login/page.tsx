@@ -107,6 +107,14 @@ export default function LoginPage() {
           }
         }
 
+        // 3. Check if email confirmation is required
+        if (authData.user && !authData.user.email_confirmed_at) {
+          // Supabase email confirmation is enabled — show verify email screen
+          setSuccessMsg("📬 Check your email! We've sent a verification link. Please verify before logging in.");
+          setLoading(false);
+          return;
+        }
+
         setSuccessMsg("🎉 Shop Registered Successfully! Logging you in...");
         setTimeout(() => {
           window.location.href = "/dashboard";
