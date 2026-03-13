@@ -63,7 +63,15 @@ export default function SuppliersPage() {
 
   const fetchSuppliers = async (storeId?: string | null) => {
     setLoading(true);
-    const { data } = await supabase.from("suppliers").select("*").order("id", { ascending: false });
+    // 🔒 FIX: Scope suppliers to the authenticated owner only (prevents multi-tenant leak)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+
+    const { data } = await supabase
+      .from("suppliers")
+      .select("*")
+      .eq("owner_id", user.id)
+      .order("id", { ascending: false });
     if (data) {
       setSuppliers(data);
       fetchAllBalances(data, storeId);
@@ -71,15 +79,19 @@ export default function SuppliersPage() {
     setLoading(false);
   };
 
-  // Fetch outstanding balance for each supplier
+  // Fetch outstanding balance for each supplier — scoped to current store
   const fetchAllBalances = async (supplierList: Supplier[], storeId?: string | null) => {
     if (!supplierList.length) return;
     const ids = supplierList.map((s) => s.id);
-    const { data } = await supabase
+    let query = supabase
       .from("supplier_credit_transactions")
       .select("supplier_id, type, amount")
       .in("supplier_id", ids);
 
+    // 🔒 FIX: Filter by store_id so Store A credits don't bleed into Store B balance
+    if (storeId) query = query.eq("store_id", storeId);
+
+    const { data } = await query;
     const map: Record<string, number> = {};
     (data || []).forEach((tx: any) => {
       if (!map[tx.supplier_id]) map[tx.supplier_id] = 0;
@@ -94,6 +106,10 @@ export default function SuppliersPage() {
     if (!formData.name || !formData.phone) return alert("Name aur Phone required hai!");
     setSubmitLoading(true);
     try {
+      // 🔒 FIX: Always attach owner_id so this supplier is scoped to the current auth user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const payload = {
         name: formData.name, contact_person: formData.contact_person,
         phone: formData.phone, email: formData.email, address: formData.address,
@@ -103,7 +119,8 @@ export default function SuppliersPage() {
         const { error } = await supabase.from("suppliers").update(payload).eq("id", formData.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("suppliers").insert([payload]);
+        // New supplier — include owner_id for isolation
+        const { error } = await supabase.from("suppliers").insert([{ ...payload, owner_id: user.id }]);
         if (error) throw error;
       }
       setIsModalOpen(false);

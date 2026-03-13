@@ -280,38 +280,29 @@ export default function SalesPage() {
 
       const invoiceNumber = generateInvoiceNumber();
 
-      let saleData: any = null;
-      let saleError: any = null;
-
-      const baseSalePayload: any = {
+      // ✅ FIX: Schema confirms total_profit + total_gst exist — removed dead retry fallback
+      const salePayload: any = {
         total_amount: Number(finalTotal.toFixed(2)),
         customer_id: customerId,
         payment_method: paymentMethod,
         split_cash: paymentMethod === "split" ? Number(splitCash.toFixed(2)) : null,
         split_upi: paymentMethod === "split" ? Number(splitUpi.toFixed(2)) : null,
         total_savings: Number(totalSavings.toFixed(2)) || 0,
+        total_profit: Number(totalProfit.toFixed(2)),
+        total_gst: Number(totalGst.toFixed(2)),
         staff_id: currentStaff?.id,
         store_id: activeStoreId,
         created_at: new Date().toISOString(),
       };
 
-      const { data: sd1, error: se1 } = await supabase.from("sales").insert([{
-        ...baseSalePayload,
-        total_profit: Number(totalProfit.toFixed(2)),
-        total_gst: Number(totalGst.toFixed(2)),
-      }]).select('id').single();
-
-      if (se1 && (se1.message?.includes("total_profit") || se1.message?.includes("total_gst") || se1.message?.includes("schema cache"))) {
-        console.warn("[Checkout] Profit/GST columns missing, retrying without them.");
-        const { data: sd2, error: se2 } = await supabase.from("sales").insert([baseSalePayload]).select('id').single();
-        saleData = sd2; saleError = se2;
-      } else {
-        saleData = sd1; saleError = se1;
-      }
+      const { data: saleData, error: saleError } = await supabase
+        .from("sales")
+        .insert([salePayload])
+        .select('id')
+        .single();
 
       if (saleError) throw saleError;
 
-      // BUG 2 FIX: mrp_at_sale column DB mein nahi hai — remove kiya insert se
       const saleItemsData = cart.map((item) => ({
         sale_id: saleData.id,
         product_id: item.id,
@@ -322,11 +313,16 @@ export default function SalesPage() {
       const { error: itemsInsertError } = await supabase.from("sale_items").insert(saleItemsData);
       if (itemsInsertError) console.error("sale_items insert error:", itemsInsertError?.message || itemsInsertError);
 
+      // ✅ FIX: Atomic stock decrement via RPC — prevents race condition when 2 cashiers checkout simultaneously
       for (const item of cart) {
-        await supabase.from("inventory").update({
-          stock: item.stock - item.quantity,
-          last_sold_at: new Date().toISOString()
-        }).eq("id", item.id);
+        const { error: stockErr } = await supabase.rpc("decrement_stock", {
+          p_product_id: item.id,
+          p_quantity: item.quantity,
+        });
+        if (stockErr) {
+          console.error(`[Checkout] Stock decrement failed for ${item.name}:`, stockErr.message);
+          // Non-fatal: sale is already recorded — log for manual reconciliation
+        }
       }
 
       setLastSale({
