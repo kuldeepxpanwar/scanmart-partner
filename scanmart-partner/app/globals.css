@@ -105,13 +105,17 @@ body {
 /* 🖨️ UNIFIED PRINT SYSTEM */
 @media print {
 
-  /* Hide everything by default */
-  body * {
-    visibility: hidden !important;
-  }
-
+  /* Hide nav/UI elements */
   .no-print {
     display: none !important;
+  }
+
+  /* 🏷️ Sticker Studio print area */
+  .scanmart-print-root {
+    display: block !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* ── Thermal 80mm Receipt ── */
@@ -156,11 +160,11 @@ body {
   }
 }
 
-/* ── Thermal @page ── */
+/* ── Default @page (stickers/labels use this) ── */
 @media print {
   @page {
-    size: 80mm auto;
-    margin: 0;
+    size: auto;
+    margin: 0.4cm;
   }
 }
 

@@ -374,16 +374,6 @@ export default function StickerPage() {
         </div>
       )}
     </div>
-
-    <style jsx global>{`
-      .scanmart-print-root { display: none; }
-      @media print {
-        .no-print { display: none !important; }
-        .scanmart-print-root { display: block !important; background: white; }
-        body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        @page { margin: 0.4cm; size: auto; }
-      }
-    `}</style>
     </>
   );
 }
