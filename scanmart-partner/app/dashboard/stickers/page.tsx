@@ -359,7 +359,6 @@ export default function StickerPage() {
   const isShelf = printMode === "shelf";
 
   return (
-    <>
     <div className="no-print flex h-screen bg-[#020617] text-white overflow-hidden font-sans">
 
       {/* ── LEFT ────────────────────────────────────────────── */}
