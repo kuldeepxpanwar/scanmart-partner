@@ -170,15 +170,15 @@ export default function StickerPage() {
   // Sticker label
   const StickerLabel = ({ item, forPrint }: { item: any; forPrint?: boolean }) => {
     const name = item.displayName || item.name;
-    const bH = forPrint ? (labelSize === "large" ? 45 : 35) : 30;
-    const bW = forPrint ? 1.2 : 1.0;
+    const bH = forPrint ? (labelSize === "large" ? 45 : 35) : 25;
+    const bW = forPrint ? 1.2 : 0.9;
     return (
-      <div style={{ textAlign: "center", padding: "6px 4px", border: "1px solid #ccc", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "white" }}>
-        <p style={{ fontSize: 7, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.12em", color: "#666", marginBottom: 2 }}>{storeName}</p>
-        <p style={{ fontWeight: 900, fontSize: 10, lineHeight: 1.2, marginBottom: 2, maxWidth: "100%", wordBreak: "break-word" }}>{name}</p>
-        {item.isWeightItem && <p style={{ fontSize: 7, color: "#888", marginBottom: 1 }}>{item.weightGrams}g</p>}
-        <Barcode value={item.barcodeValue} width={bW} height={bH} fontSize={8} displayValue={true} />
-        {showPrice && <p style={{ fontWeight: 900, fontSize: 14, marginTop: 2 }}>₹{item.price}</p>}
+      <div style={{ textAlign: "center", padding: "6px 4px", border: "1px solid #ccc", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "white", color: "#000" }}>
+        <p style={{ fontSize: 7, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.12em", color: "#333", marginBottom: 2 }}>{storeName}</p>
+        <p style={{ fontWeight: 900, fontSize: 10, lineHeight: 1.2, marginBottom: 2, color: "#000", maxWidth: "100%", wordBreak: "break-word" }}>{name}</p>
+        {item.isWeightItem && <p style={{ fontSize: 7, color: "#555", marginBottom: 1 }}>{item.weightGrams}g</p>}
+        <Barcode value={item.barcodeValue} width={bW} height={bH} fontSize={8} displayValue={true} background="#ffffff" lineColor="#000000" />
+        {showPrice && <p style={{ fontWeight: 900, fontSize: 14, marginTop: 2, color: "#000" }}>₹{item.price}</p>}
       </div>
     );
   };
