@@ -193,6 +193,7 @@ export default function StickerPage() {
   const isShelf = printMode === "shelf";
 
   return (
+    <>
     <div className="no-print flex h-screen bg-[#020617] text-white overflow-hidden font-sans">
 
       {/* ── LEFT ────────────────────────────────────────────── */}
@@ -316,48 +317,6 @@ export default function StickerPage() {
         </div>
       </div>
 
-      {/* ── PRINT AREA ──────────────────────────────────────────── */}
-      {/* Uses visibility trick: on print, body descendants hidden except this */}
-      <div className="scanmart-print-root">
-        {isShelf ? (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: labelSize === "large" ? "1fr" : "1fr 1fr",
-            gap: 0, padding: 4,
-          }}>
-            {printQueue.flatMap(item =>
-              Array(item.copies).fill(null).map((_, idx) => (
-                <div key={`${item.id}-${idx}`} style={{ padding: 3 }}>
-                  <ShelfLabel item={item} forPrint />
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: labelSize === "large" ? "1fr 1fr" : "1fr 1fr 1fr",
-            gap: 3, padding: 4,
-          }}>
-            {printQueue.flatMap(item =>
-              Array(item.copies).fill(null).map((_, idx) => (
-                <StickerLabel key={`${item.id}-${idx}`} item={item} forPrint />
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      <style jsx global>{`
-        .scanmart-print-root { display: none; }
-        @media print {
-          .no-print { display: none !important; }
-          .scanmart-print-root { display: block !important; background: white; }
-          body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          @page { margin: 0.4cm; size: auto; }
-        }
-      `}</style>
-
       {/* ── WEIGHT MODAL ─────────────────────────────────────────── */}
       {weightModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]" onClick={() => setWeightModal(false)}>
@@ -384,5 +343,47 @@ export default function StickerPage() {
         </div>
       )}
     </div>
+
+    {/* ── PRINT AREA — sibling of main div, not child, so no-print doesn't hide it ── */}
+    <div className="scanmart-print-root">
+      {isShelf ? (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: labelSize === "large" ? "1fr" : "1fr 1fr",
+          gap: 0, padding: 4,
+        }}>
+          {printQueue.flatMap(item =>
+            Array(item.copies).fill(null).map((_, idx) => (
+              <div key={`${item.id}-${idx}`} style={{ padding: 3 }}>
+                <ShelfLabel item={item} forPrint />
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: labelSize === "large" ? "1fr 1fr" : "1fr 1fr 1fr",
+          gap: 3, padding: 4,
+        }}>
+          {printQueue.flatMap(item =>
+            Array(item.copies).fill(null).map((_, idx) => (
+              <StickerLabel key={`${item.id}-${idx}`} item={item} forPrint />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+
+    <style jsx global>{`
+      .scanmart-print-root { display: none; }
+      @media print {
+        .no-print { display: none !important; }
+        .scanmart-print-root { display: block !important; background: white; }
+        body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { margin: 0.4cm; size: auto; }
+      }
+    `}</style>
+    </>
   );
 }
