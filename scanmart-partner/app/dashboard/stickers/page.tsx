@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Barcode from "react-barcode";
-import { Search, Printer, Plus, Minus, X, ScanBarcode, ShoppingBag, Store, Scale, ToggleLeft, ToggleRight } from "lucide-react";
+import { Search, Printer, Plus, Minus, X, ScanBarcode, ShoppingBag, Store, Scale, ToggleLeft, ToggleRight, Tag, Layers } from "lucide-react";
 
 export default function StickerPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -22,6 +22,9 @@ export default function StickerPage() {
   const [weightModal, setWeightModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [weightInput, setWeightInput] = useState("");
+
+  // 🏷️ Print Mode: 'sticker' (small barcode label) | 'shelf' (large shelf price tag)
+  const [printMode, setPrintMode] = useState<'sticker' | 'shelf'>('sticker');
 
   // --- 🔄 INITIALIZATION ---
   useEffect(() => {
@@ -150,6 +153,17 @@ export default function StickerPage() {
             <div className="flex justify-between items-end mt-1">
                 <p className="text-xs text-slate-500">Select products to generate barcodes</p>
                 <div className="flex items-center gap-2">
+                    {/* Print Mode Toggle */}
+                    <button
+                        onClick={() => setPrintMode(m => m === 'sticker' ? 'shelf' : 'sticker')}
+                        className={`flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded transition-all ${
+                            printMode === 'shelf' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'
+                        }`}
+                        title="Toggle Shelf Label mode"
+                    >
+                        <Tag size={10}/>
+                        {printMode === 'shelf' ? 'Shelf Label' : 'Sticker'}
+                    </button>
                     {/* Weight Mode Toggle */}
                     <button
                         onClick={() => setWeightMode(w => !w)}
@@ -171,6 +185,11 @@ export default function StickerPage() {
             {weightMode && (
                 <p className="text-[10px] text-orange-400 mt-2 bg-orange-500/10 px-2 py-1 rounded">
                     ⚖️ Weight Mode ON — Click product to enter grams, price auto-calculates
+                </p>
+            )}
+            {printMode === 'shelf' && !weightMode && (
+                <p className="text-[10px] text-yellow-400 mt-2 bg-yellow-500/10 px-2 py-1 rounded">
+                    🏷️ Shelf Label Mode — Products will print as shelf price tags (MRP + Smart Price + SAVE badge)
                 </p>
             )}
             
@@ -234,19 +253,50 @@ export default function StickerPage() {
                 <div key={item.id} className="bg-white text-black p-4 rounded-xl relative group">
                     <button onClick={() => removeFromQueue(item.id)} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-lg"><X size={12}/></button>
                     
-                    {/* Sticker Preview */}
-                    <div className="flex flex-col items-center text-center border-2 border-dashed border-gray-300 p-2 rounded">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{storeName}</p>
-                        <p className="font-black text-sm leading-tight my-1 line-clamp-1">{item.isWeightItem ? item.displayName : item.name}</p>
-                        {item.isWeightItem && (
-                            <p className="text-[9px] text-gray-400 font-medium">{item.weightGrams}g @ ₹{Number(selectedProduct?.price || item.price).toFixed(0)}/kg</p>
-                        )}
-                        <Barcode value={item.barcodeValue} width={1.5} height={40} fontSize={12} displayValue={true} />
-                        {showPrice && <p className="font-bold text-lg mt-1">₹{item.price}</p>}
-                    </div>
+                    {printMode === 'shelf' ? (
+                        /* ── SHELF LABEL PREVIEW ── */
+                        <div className="border-2 border-dashed border-yellow-300 rounded p-2">
+                            <div className="bg-yellow-400 rounded-sm px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-yellow-900 w-fit mb-1">{storeName}</div>
+                            <p className="font-black text-sm leading-tight line-clamp-2 mb-1">{item.isWeightItem ? item.displayName : item.name}</p>
+                            {/* MRP editable */}
+                            <div className="flex items-center gap-1 mb-1">
+                                <span className="text-[9px] text-gray-500 font-medium">MRP ₹</span>
+                                <input
+                                    type="number"
+                                    value={item.mrp ?? ''}
+                                    placeholder="MRP"
+                                    onClick={e => e.stopPropagation()}
+                                    onChange={e => setPrintQueue(prev => prev.map(p => p.id === item.id ? { ...p, mrp: e.target.value } : p))}
+                                    className="w-16 border-b border-gray-400 text-[10px] text-gray-500 line-through outline-none text-center bg-transparent"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {item.mrp && parseFloat(item.mrp) > parseFloat(item.price) && (
+                                    <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">
+                                        SAVE ₹{(parseFloat(item.mrp) - parseFloat(item.price)).toFixed(0)}
+                                    </span>
+                                )}
+                                <span className="text-lg font-black text-green-700">₹{item.price}</span>
+                            </div>
+                            <div className="mt-1 scale-75 origin-left">
+                                <Barcode value={item.barcodeValue} width={1.2} height={28} fontSize={8} displayValue={false} />
+                            </div>
+                        </div>
+                    ) : (
+                        /* ── STICKER PREVIEW ── */
+                        <div className="flex flex-col items-center text-center border-2 border-dashed border-gray-300 p-2 rounded">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{storeName}</p>
+                            <p className="font-black text-sm leading-tight my-1 line-clamp-1">{item.isWeightItem ? item.displayName : item.name}</p>
+                            {item.isWeightItem && (
+                                <p className="text-[9px] text-gray-400 font-medium">{item.weightGrams}g @ ₹{Number(selectedProduct?.price || item.price).toFixed(0)}/kg</p>
+                            )}
+                            <Barcode value={item.barcodeValue} width={1.5} height={40} fontSize={12} displayValue={true} />
+                            {showPrice && <p className="font-bold text-lg mt-1">₹{item.price}</p>}
+                        </div>
+                    )}
 
                     {/* Controls */}
-                    <div className="flex justify-center items-center gap-3 mt-4 bg-gray-100 p-2 rounded-lg">
+                    <div className="flex justify-center items-center gap-3 mt-3 bg-gray-100 p-2 rounded-lg">
                         <button onClick={() => updateCopies(item.id, -1)} className="p-1 hover:bg-gray-200 rounded"><Minus size={14}/></button>
                         <span className="font-bold text-sm w-4 text-center">{item.copies}</span>
                         <button onClick={() => updateCopies(item.id, 1)} className="p-1 hover:bg-gray-200 rounded"><Plus size={14}/></button>
@@ -258,7 +308,46 @@ export default function StickerPage() {
 
       {/* 🖨️ ACTUAL PRINT AREA (Visible ONLY on Print) */}
       <div className="print-area hidden bg-white text-black absolute top-0 left-0 w-full h-full z-[9999]">
-         <div className="grid grid-cols-3 gap-4 p-4">
+        {printMode === 'shelf' ? (
+          /* ── SHELF LABEL PRINT LAYOUT ── */
+          <div className="grid grid-cols-2 gap-0 p-2">
+            {printQueue.flatMap(item =>
+              Array(item.copies).fill(item).map((_, idx) => {
+                const mrpNum = item.mrp ? parseFloat(item.mrp) : 0;
+                const priceNum = parseFloat(item.price);
+                const savings = mrpNum > priceNum ? (mrpNum - priceNum).toFixed(0) : null;
+                return (
+                  <div key={`shelf-${item.id}-${idx}`} className="shelf-label border border-gray-300 p-3 flex gap-3 items-center break-inside-avoid" style={{minHeight: '120px', background: '#FFFDE7'}}>
+                    {/* Left: SAVE badge + Barcode */}
+                    <div className="flex flex-col items-center flex-shrink-0">
+                      {savings && (
+                        <div style={{background:'#e53935', color:'white', fontWeight:900, fontSize:'11px', padding:'2px 6px', borderRadius:'4px', marginBottom:'4px'}}>
+                          SAVE ₹{savings}
+                        </div>
+                      )}
+                      <Barcode value={item.barcodeValue} width={1.2} height={50} fontSize={9} displayValue={true} />
+                    </div>
+                    {/* Right: Name + Prices */}
+                    <div className="flex-1">
+                      <p style={{fontSize:'8px', fontWeight:900, textTransform:'uppercase', letterSpacing:'0.15em', color:'#888', marginBottom:'2px'}}>{storeName}</p>
+                      <p style={{fontWeight:900, fontSize:'13px', lineHeight:'1.2', marginBottom:'4px'}}>{item.isWeightItem ? item.displayName : item.name}</p>
+                      {item.isWeightItem && (
+                        <p style={{fontSize:'9px', color:'#666', marginBottom:'4px'}}>{item.weightGrams}g</p>
+                      )}
+                      {mrpNum > 0 && (
+                        <p style={{fontSize:'10px', color:'#999', textDecoration:'line-through', marginBottom:'2px'}}>MRP ₹{mrpNum.toFixed(0)}</p>
+                      )}
+                      <p style={{fontSize:'10px', fontWeight:700, color:'#555', marginBottom:'2px'}}>Smart Price</p>
+                      <p style={{fontSize:'28px', fontWeight:900, color:'#1b5e20', lineHeight:'1'}}>₹{priceNum.toFixed(0)}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* ── STICKER PRINT LAYOUT ── */
+          <div className="grid grid-cols-3 gap-4 p-4">
             {printQueue.flatMap(item => 
                Array(item.copies).fill(item).map((_, idx) => (
                    <div key={`${item.id}-${idx}`} className="border border-gray-300 p-2 flex flex-col items-center justify-center text-center h-[180px] break-inside-avoid page-break">
@@ -267,7 +356,6 @@ export default function StickerPage() {
                        {item.isWeightItem && (
                            <p className="text-[9px] text-gray-500">{item.weightGrams}g</p>
                        )}
-                       {/* Barcode Component */}
                        <div className="scale-90 origin-center">
                            <Barcode value={item.barcodeValue} width={1.5} height={50} fontSize={14} displayValue={true} />
                        </div>
@@ -275,17 +363,19 @@ export default function StickerPage() {
                    </div>
                ))
             )}
-         </div>
+          </div>
+        )}
       </div>
 
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
           .print-area { display: block !important; }
-          body { background: white; -webkit-print-color-adjust: exact; }
+          body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @page { margin: 0.5cm; size: auto; }
         }
         .page-break { page-break-inside: avoid; }
+        .shelf-label { page-break-inside: avoid; }
       `}</style>
 
       {/* ⚖️ Weight Input Modal */}
