@@ -193,7 +193,7 @@ export default function StickerPage() {
   const isShelf = printMode === "shelf";
 
   return (
-    <div className="flex h-screen bg-[#020617] text-white overflow-hidden font-sans">
+    <div className="no-print flex h-screen bg-[#020617] text-white overflow-hidden font-sans">
 
       {/* ── LEFT ────────────────────────────────────────────── */}
       <div className="w-1/3 border-r border-slate-800 flex flex-col no-print">
@@ -351,9 +351,9 @@ export default function StickerPage() {
       <style jsx global>{`
         .scanmart-print-root { display: none; }
         @media print {
-          body * { visibility: hidden !important; }
-          .scanmart-print-root { visibility: visible !important; display: block !important; position: fixed !important; top: 0; left: 0; width: 100%; background: white; z-index: 99999; }
-          .scanmart-print-root * { visibility: visible !important; }
+          .no-print { display: none !important; }
+          .scanmart-print-root { display: block !important; background: white; }
+          body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @page { margin: 0.4cm; size: auto; }
         }
       `}</style>
