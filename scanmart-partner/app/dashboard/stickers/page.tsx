@@ -98,19 +98,19 @@ export default function StickerPage() {
     const bigFont = labelSize === "large" ? 22 : 18;
 
     if (shelfTemplate === "sale") return (
-      <div style={{ background: "#B71C1C", padding: 8, display: "flex", gap: 8, alignItems: "center", minHeight: labelSize === "large" ? 130 : 100, color: "white", borderRadius: forPrint ? 0 : 6 }}>
+      <div style={{ background: "#FFF3E0", border: "2px solid #e53935", padding: 8, display: "flex", gap: 8, alignItems: "center", minHeight: labelSize === "large" ? 130 : 100, borderRadius: forPrint ? 0 : 6 }}>
         <div style={{ background: "white", padding: 4, borderRadius: 4, flexShrink: 0 }}>
           <Barcode value={item.barcodeValue} width={bW} height={bH} fontSize={7} displayValue={false} />
         </div>
         <div style={{ flex: 1 }}>
-          <span style={{ background: "#FF6F00", color: "white", fontSize: 10, fontWeight: 900, padding: "1px 6px", borderRadius: 4, display: "inline-block", marginBottom: 3 }}>🔥 SALE</span>
-          <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 13 : 10, lineHeight: 1.2, color: "#FFE082", marginBottom: 3 }}>{name}</p>
-          {mrp > 0 && <p style={{ fontSize: 9, color: "#FFCDD2", textDecoration: "line-through" }}>MRP ₹{mrp.toFixed(0)}</p>}
-          <p style={{ fontSize: 8, color: "#FFCDD2", marginBottom: 1 }}>Smart Price</p>
-          <p style={{ fontSize: bigFont, fontWeight: 900, color: "#FFEB3B", lineHeight: 1 }}>₹{price.toFixed(0)}</p>
-          {savings > 0 && <p style={{ fontSize: 8, color: "#FFCDD2", marginTop: 2 }}>Save ₹{savings.toFixed(0)}</p>}
+          <span style={{ background: "#e53935", color: "white", fontSize: 10, fontWeight: 900, padding: "1px 6px", borderRadius: 4, display: "inline-block", marginBottom: 3 }}>🔥 SALE</span>
+          <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 13 : 10, lineHeight: 1.2, color: "#111", marginBottom: 3 }}>{name}</p>
+          {mrp > 0 && <p style={{ fontSize: 9, color: "#999", textDecoration: "line-through" }}>MRP ₹{mrp.toFixed(0)}</p>}
+          <p style={{ fontSize: 8, color: "#555", marginBottom: 1 }}>Smart Price</p>
+          <p style={{ fontSize: bigFont, fontWeight: 900, color: "#b71c1c", lineHeight: 1 }}>₹{price.toFixed(0)}</p>
+          {savings > 0 && <p style={{ fontSize: 8, color: "#e53935", marginTop: 2, fontWeight: 700 }}>You save ₹{savings.toFixed(0)}</p>}
         </div>
-        <p style={{ writingMode: "vertical-rl", fontSize: 7, fontWeight: 900, color: "#EF9A9A", letterSpacing: "0.1em", textTransform: "uppercase" }}>{storeName}</p>
+        <p style={{ writingMode: "vertical-rl", fontSize: 7, fontWeight: 900, color: "#e53935", letterSpacing: "0.1em", textTransform: "uppercase" }}>{storeName}</p>
       </div>
     );
 
@@ -124,7 +124,7 @@ export default function StickerPage() {
             <p style={{ fontSize: 7, fontWeight: 900, color: "#888", textTransform: "uppercase", marginBottom: 2 }}>{storeName}</p>
             <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 12 : 10, lineHeight: 1.2, color: "#1A237E", marginBottom: 4 }}>{name}</p>
             <div style={{ background: "#1565C0", color: "white", fontWeight: 900, fontSize: labelSize === "large" ? 12 : 10, padding: "4px 8px", borderRadius: 4, display: "inline-block", marginBottom: 4, lineHeight: 1.3 }}>
-              BUY 1<br/><span style={{ fontSize: labelSize === "large" ? 16 : 13 }}>GET 1 FREE</span>
+              BUY 1<br /><span style={{ fontSize: labelSize === "large" ? 16 : 13 }}>GET 1 FREE</span>
             </div>
             <p style={{ fontSize: bigFont, fontWeight: 900, color: "#1565C0", lineHeight: 1 }}>₹{price.toFixed(0)}</p>
             <p style={{ fontSize: 7, color: "#666", marginTop: 1 }}>MRP ₹{mrp > 0 ? mrp.toFixed(0) : price.toFixed(0)} each</p>
@@ -134,16 +134,17 @@ export default function StickerPage() {
     );
 
     if (shelfTemplate === "new") return (
-      <div style={{ background: "#1A237E", padding: 8, display: "flex", gap: 8, alignItems: "center", minHeight: labelSize === "large" ? 130 : 100, borderRadius: forPrint ? 0 : 6 }}>
-        <div style={{ background: "white", padding: 4, borderRadius: 4, flexShrink: 0 }}>
+      <div style={{ background: "#E8F5E9", border: "2px solid #1A237E", padding: 8, display: "flex", gap: 8, alignItems: "center", minHeight: labelSize === "large" ? 130 : 100, borderRadius: forPrint ? 0 : 6 }}>
+        <div style={{ flexShrink: 0 }}>
           <Barcode value={item.barcodeValue} width={bW} height={bH} fontSize={7} displayValue={false} />
         </div>
         <div style={{ flex: 1 }}>
-          <span style={{ background: "#00BCD4", color: "white", fontSize: 8, fontWeight: 900, padding: "1px 6px", borderRadius: 10, display: "inline-block", marginBottom: 3 }}>✨ New Arrival</span>
-          <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 13 : 10, lineHeight: 1.2, color: "#E3F2FD", marginBottom: 3 }}>{name}</p>
-          {mrp > 0 && <p style={{ fontSize: 9, color: "#90CAF9", textDecoration: "line-through" }}>MRP ₹{mrp.toFixed(0)}</p>}
-          <p style={{ fontSize: bigFont, fontWeight: 900, color: "#4FC3F7", lineHeight: 1 }}>₹{price.toFixed(0)}</p>
-          <p style={{ fontSize: 7, color: "#90CAF9", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.1em" }}>{storeName}</p>
+          <span style={{ background: "#1A237E", color: "white", fontSize: 8, fontWeight: 900, padding: "1px 6px", borderRadius: 10, display: "inline-block", marginBottom: 3 }}>✨ New Arrival</span>
+          <p style={{ fontWeight: 900, fontSize: labelSize === "large" ? 13 : 10, lineHeight: 1.2, color: "#111", marginBottom: 3 }}>{name}</p>
+          {mrp > 0 && <p style={{ fontSize: 9, color: "#999", textDecoration: "line-through" }}>MRP ₹{mrp.toFixed(0)}</p>}
+          <p style={{ fontSize: 8, fontWeight: 700, color: "#555", marginBottom: 1 }}>Smart Price</p>
+          <p style={{ fontSize: bigFont, fontWeight: 900, color: "#1A237E", lineHeight: 1 }}>₹{price.toFixed(0)}</p>
+          <p style={{ fontSize: 7, color: "#888", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.1em" }}>{storeName}</p>
         </div>
       </div>
     );
