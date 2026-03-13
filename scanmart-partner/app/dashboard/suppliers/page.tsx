@@ -63,15 +63,19 @@ export default function SuppliersPage() {
 
   const fetchSuppliers = async (storeId?: string | null) => {
     setLoading(true);
-    // 🔒 FIX: Scope suppliers to the authenticated owner only (prevents multi-tenant leak)
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const { data } = await supabase
-      .from("suppliers")
-      .select("*")
-      .eq("owner_id", user.id)
-      .order("id", { ascending: false });
+    // 🔒 Filter by store_id if available — each mart gets its own suppliers
+    // Falls back to owner_id for backward compatibility (old rows without store_id)
+    let query = supabase.from("suppliers").select("*").order("id", { ascending: false });
+    if (storeId) {
+      query = query.eq("store_id", storeId);
+    } else {
+      query = query.eq("owner_id", user.id);
+    }
+
+    const { data } = await query;
     if (data) {
       setSuppliers(data);
       fetchAllBalances(data, storeId);
@@ -119,8 +123,12 @@ export default function SuppliersPage() {
         const { error } = await supabase.from("suppliers").update(payload).eq("id", formData.id);
         if (error) throw error;
       } else {
-        // New supplier — include owner_id for isolation
-        const { error } = await supabase.from("suppliers").insert([{ ...payload, owner_id: user.id }]);
+        // 🔒 New supplier — attach both owner_id AND store_id for proper per-mart isolation
+        const { error } = await supabase.from("suppliers").insert([{
+          ...payload,
+          owner_id: user.id,
+          store_id: activeStoreId || null,
+        }]);
         if (error) throw error;
       }
       setIsModalOpen(false);
