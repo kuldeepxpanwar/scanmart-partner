@@ -80,7 +80,173 @@ export default function StickerPage() {
     setPrintQueue(prev => prev.map(i => i.id === id ? { ...i, copies: Math.max(1, i.copies + delta) } : i));
   const removeFromQueue = (id: string) =>
     setPrintQueue(prev => prev.filter(i => i.id !== id));
-  const handlePrint = () => { if (!printQueue.length) { alert("Select items first!"); return; } window.print(); };
+
+  const handlePrint = () => {
+    if (!printQueue.length) { alert("Select items first!"); return; }
+
+    const cols = printMode === "shelf"
+      ? (labelSize === "large" ? 1 : 2)
+      : (labelSize === "large" ? 2 : 3);
+
+    const allItems = printQueue.flatMap(item => Array(item.copies).fill(item));
+
+    const labelHTML = allItems.map(item => {
+      const mrp = item.mrp ? parseFloat(item.mrp) : 0;
+      const price = parseFloat(item.price);
+      const savings = mrp > price ? (mrp - price) : 0;
+      const name = (item.displayName || item.name || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      const bc = (item.barcodeValue || "").toString();
+
+      if (printMode === "sticker") {
+        return `
+          <div class="label sticker-label">
+            <p class="store-name">${storeName}</p>
+            <p class="product-name">${name}</p>
+            ${item.isWeightItem ? `<p class="weight-info">${item.weightGrams}g</p>` : ""}
+            <svg class="barcode" data-value="${bc}"></svg>
+            ${showPrice ? `<p class="price">&#8377;${price.toFixed(0)}</p>` : ""}
+          </div>`;
+      }
+
+      // shelf templates
+      if (shelfTemplate === "sale") {
+        return `
+          <div class="label shelf-label sale-label">
+            <div class="shelf-left">
+              <span class="sale-badge">&#128293; SALE</span>
+              ${savings > 0 ? `<span class="save-badge">SAVE &#8377;${savings.toFixed(0)}</span>` : ""}
+              <svg class="barcode" data-value="${bc}"></svg>
+            </div>
+            <div class="shelf-right">
+              <p class="store-name">${storeName}</p>
+              <p class="product-name">${name}</p>
+              ${mrp > 0 ? `<p class="mrp">MRP &#8377;${mrp.toFixed(0)}</p>` : ""}
+              <p class="smart-price-label">Smart Price</p>
+              <p class="big-price sale-price">&#8377;${price.toFixed(0)}</p>
+              ${savings > 0 ? `<p class="you-save">You save &#8377;${savings.toFixed(0)}</p>` : ""}
+            </div>
+          </div>`;
+      }
+
+      if (shelfTemplate === "bogo") {
+        return `
+          <div class="label shelf-label bogo-label">
+            <div class="shelf-left">
+              <svg class="barcode" data-value="${bc}"></svg>
+            </div>
+            <div class="shelf-right">
+              <p class="store-name">${storeName}</p>
+              <p class="product-name">${name}</p>
+              <div class="bogo-badge">BUY 1<br><span>GET 1 FREE</span></div>
+              <p class="big-price bogo-price">&#8377;${price.toFixed(0)}</p>
+              <p class="mrp">MRP &#8377;${mrp > 0 ? mrp.toFixed(0) : price.toFixed(0)} each</p>
+            </div>
+          </div>`;
+      }
+
+      if (shelfTemplate === "new") {
+        return `
+          <div class="label shelf-label new-label">
+            <div class="shelf-left">
+              <svg class="barcode" data-value="${bc}"></svg>
+            </div>
+            <div class="shelf-right">
+              <span class="new-badge">&#10024; New Arrival</span>
+              <p class="product-name">${name}</p>
+              ${mrp > 0 ? `<p class="mrp">MRP &#8377;${mrp.toFixed(0)}</p>` : ""}
+              <p class="smart-price-label">Smart Price</p>
+              <p class="big-price new-price">&#8377;${price.toFixed(0)}</p>
+              <p class="store-name">${storeName}</p>
+            </div>
+          </div>`;
+      }
+
+      // regular (default)
+      return `
+        <div class="label shelf-label regular-label">
+          <div class="shelf-left">
+            ${savings > 0 ? `<div class="save-badge">SAVE &#8377;${savings.toFixed(0)}</div>` : ""}
+            <svg class="barcode" data-value="${bc}"></svg>
+          </div>
+          <div class="shelf-right">
+            <p class="store-name">${storeName}</p>
+            <p class="product-name">${name}</p>
+            ${mrp > 0 ? `<p class="mrp">MRP &#8377;${mrp.toFixed(0)}</p>` : ""}
+            <p class="smart-price-label">Smart Price</p>
+            <p class="big-price regular-price">&#8377;${price.toFixed(0)}</p>
+          </div>
+        </div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${storeName} — Labels</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: white; color: #000; }
+    @page { size: auto; margin: 0.4cm; }
+    .grid { display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 4px; padding: 4px; }
+
+    /* ── STICKER ── */
+    .sticker-label { text-align: center; border: 1px solid #ccc; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; }
+    .sticker-label .store-name { font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.12em; color: #333; margin-bottom: 2px; }
+    .sticker-label .product-name { font-weight: 900; font-size: 10px; line-height: 1.2; margin-bottom: 2px; color: #000; }
+    .sticker-label .weight-info { font-size: 7px; color: #555; margin-bottom: 1px; }
+    .sticker-label .price { font-weight: 900; font-size: 16px; margin-top: 2px; color: #000; }
+
+    /* ── SHELF COMMON ── */
+    .shelf-label { display: flex; align-items: center; gap: 8px; padding: 8px; min-height: ${labelSize === "large" ? "130px" : "100px"}; break-inside: avoid; page-break-inside: avoid; }
+    .shelf-left { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .shelf-right { flex: 1; }
+    .store-name { font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.12em; color: #333; margin-bottom: 2px; }
+    .product-name { font-weight: 900; font-size: ${labelSize === "large" ? "13px" : "10px"}; line-height: 1.2; color: #000; margin-bottom: 3px; }
+    .mrp { font-size: 9px; color: #666; text-decoration: line-through; margin-bottom: 1px; }
+    .smart-price-label { font-size: 8px; font-weight: 700; color: #333; margin-bottom: 1px; }
+    .big-price { font-weight: 900; font-size: ${labelSize === "large" ? "28px" : "22px"}; line-height: 1; }
+    .save-badge { background: #e53935; color: white; font-weight: 900; font-size: 9px; padding: 1px 5px; border-radius: 3px; display: inline-block; }
+    .you-save { font-size: 8px; color: #e53935; font-weight: 700; margin-top: 2px; }
+
+    /* ── REGULAR ── */
+    .regular-label { background: #FFFDE7; border: 2px solid #FDD835; }
+    .regular-price { color: #1b5e20; }
+
+    /* ── SALE ── */
+    .sale-label { background: #FFF3E0; border: 2px solid #e53935; }
+    .sale-badge { background: #e53935; color: white; font-size: 10px; font-weight: 900; padding: 1px 6px; border-radius: 4px; display: inline-block; margin-bottom: 3px; }
+    .sale-price { color: #b71c1c; }
+
+    /* ── BOGO ── */
+    .bogo-label { background: #E3F2FD; border: 2px solid #1565C0; }
+    .bogo-badge { background: #1565C0; color: white; font-weight: 900; font-size: ${labelSize === "large" ? "12px" : "10px"}; padding: 4px 8px; border-radius: 4px; display: inline-block; line-height: 1.3; margin-bottom: 4px; }
+    .bogo-badge span { font-size: ${labelSize === "large" ? "16px" : "13px"}; }
+    .bogo-price { color: #1565C0; }
+
+    /* ── NEW ARRIVAL ── */
+    .new-label { background: #E8F5E9; border: 2px solid #1A237E; }
+    .new-badge { background: #1A237E; color: white; font-size: 8px; font-weight: 900; padding: 1px 6px; border-radius: 10px; display: inline-block; margin-bottom: 3px; }
+    .new-price { color: #1A237E; }
+  </style>
+</head>
+<body>
+  <div class="grid">${labelHTML}</div>
+  <script>
+    JsBarcode(".barcode", { format: "CODE128", width: 1.5, height: ${labelSize === "large" ? 45 : 35}, fontSize: 10, displayValue: true, background: "#ffffff", lineColor: "#000000" });
+    window.onafterprint = function() { window.close(); };
+    setTimeout(function() { window.print(); }, 700);
+  </script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) { alert("Popup blocked! Please allow popups for this site and try again."); return; }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  };
+
 
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const totalLabels = printQueue.reduce((a, i) => a + i.copies, 0);
@@ -330,8 +496,8 @@ export default function StickerPage() {
             {weightInput && parseFloat(weightInput) > 0 && (
               <div className="mt-3 bg-blue-600/20 border border-blue-500/30 rounded-lg p-3 text-center">
                 <p className="text-xs text-slate-400">Calculated Price</p>
-                <p className="text-2xl font-black">₹{((parseFloat(weightInput) / 1000) * selectedProduct.price).toFixed(2)}</p>
-                <p className="text-[10px] text-slate-500">{weightInput}g × ₹{selectedProduct.price}/kg</p>
+                <p className="text-2xl font-black">&#x20B9;{((parseFloat(weightInput) / 1000) * selectedProduct.price).toFixed(2)}</p>
+                <p className="text-[10px] text-slate-500">{weightInput}g x &#x20B9;{selectedProduct.price}/kg</p>
               </div>
             )}
             <div className="flex gap-3 mt-4">
@@ -343,37 +509,5 @@ export default function StickerPage() {
         </div>
       )}
     </div>
-
-    {/* ── PRINT AREA — sibling of main div, not child, so no-print doesn't hide it ── */}
-    <div className="scanmart-print-root">
-      {isShelf ? (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: labelSize === "large" ? "1fr" : "1fr 1fr",
-          gap: 0, padding: 4,
-        }}>
-          {printQueue.flatMap(item =>
-            Array(item.copies).fill(null).map((_, idx) => (
-              <div key={`${item.id}-${idx}`} style={{ padding: 3 }}>
-                <ShelfLabel item={item} forPrint />
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: labelSize === "large" ? "1fr 1fr" : "1fr 1fr 1fr",
-          gap: 3, padding: 4,
-        }}>
-          {printQueue.flatMap(item =>
-            Array(item.copies).fill(null).map((_, idx) => (
-              <StickerLabel key={`${item.id}-${idx}`} item={item} forPrint />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-    </>
   );
 }
