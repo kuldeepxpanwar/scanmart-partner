@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import toast from "react-hot-toast";
 import {
   Search,
   Plus,
@@ -220,7 +221,9 @@ export default function InventoryPage() {
 
   // 🔥 Fetch Suppliers Function
   const fetchSuppliers = async () => {
-    const { data } = await supabase.from("suppliers").select("id, name");
+    const storeId = localStorage.getItem("active_store_id");
+    const query = supabase.from("suppliers").select("id, name");
+    const { data } = storeId ? await query.eq("store_id", storeId) : await query;
     if (data) setSuppliers(data);
   };
 
@@ -273,7 +276,7 @@ export default function InventoryPage() {
         closeConfirm();
         setProducts(prev => prev.filter(item => item.id !== id));
         const { error } = await supabase.from("inventory").update({ is_active: false }).eq("id", id);
-        if (error) { alert("Archive failed: " + error.message); fetchData(); }
+        if (error) { toast.error("Archive failed: " + error.message); fetchData(); }
       },
       "Archive",
       "bg-red-600 hover:bg-red-500"
@@ -289,7 +292,7 @@ export default function InventoryPage() {
         closeConfirm();
         setProducts(prev => prev.filter(item => item.id !== id));
         const { error } = await supabase.from("inventory").update({ is_active: true }).eq("id", id);
-        if (error) { alert("Restore failed: " + error.message); fetchData(); }
+        if (error) { toast.error("Restore failed: " + error.message); fetchData(); }
       },
       "Restore",
       "bg-green-600 hover:bg-green-500"
@@ -321,11 +324,12 @@ export default function InventoryPage() {
         is_active: true
       },
     ]);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else {
       setIsAddOpen(false);
       resetForm();
       fetchData();
+      toast.success("Product added!");
     }
   };
 
@@ -350,18 +354,19 @@ export default function InventoryPage() {
         stock: Number(editItem.stock),
         category: editItem.category,
         gst_rate: Number(editItem.gst_rate),
+        discount_percent: Number(editItem.discount_percent) || 0,
         barcode: editItem.barcode || null,
         image: editItem.image || null,
-        supplier_id: editItem.supplier_id || null, // 🔥 Update Supplier
+        supplier_id: editItem.supplier_id || null,
       })
       .eq("id", editItem.id);
 
-    if (error) alert("Update Failed: " + error.message);
+    if (error) toast.error("Update failed: " + error.message);
     else {
       setIsEditOpen(false);
       setEditItem(null);
       fetchData();
-      alert("✅ Updated!");
+      toast.success("Product updated!");
     }
   };
 
@@ -406,7 +411,7 @@ export default function InventoryPage() {
         const { error } = await supabase.from("inventory").insert(newProducts);
         if (error) alert(error.message);
         else {
-          alert(`✅ ${newProducts.length} Items Imported!`);
+          toast.success(`${newProducts.length} items imported!`);
           setIsImportOpen(false);
           fetchData();
         }
@@ -431,9 +436,9 @@ export default function InventoryPage() {
       status: 'pending'
     }]);
 
-    if (error) alert("Transfer Failed: " + error.message);
+    if (error) toast.error("Transfer failed: " + error.message);
     else {
-      alert("✅ Transfer Request Sent!");
+      toast.success("Transfer request sent!");
       setIsTransferOpen(false);
       fetchData();
     }
@@ -858,7 +863,7 @@ export default function InventoryPage() {
               {batchLoading ? (
                 <div className="flex justify-center py-8"><Loader2 className="animate-spin text-orange-500" size={28} /></div>
               ) : batches.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-sm font-bold">Koi batch nahi hai — neeche add karo 👇</div>
+                <div className="text-center py-8 text-slate-500 text-sm font-bold">No batches yet — add one below 👇</div>
               ) : (
                 batches.map(batch => {
                   const expStatus = getExpiryStatus(batch.expiry_date);

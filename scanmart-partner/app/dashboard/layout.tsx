@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, X } from "lucide-react";
 import { applyTheme, getTheme } from "@/lib/theme";
+import { Toaster } from "react-hot-toast";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
@@ -93,6 +94,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </ErrorBoundary>
         </div>
       </main>
+      <Toaster position="bottom-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155', fontSize: '13px' }, success: { iconTheme: { primary: '#22c55e', secondary: '#f1f5f9' } }, error: { iconTheme: { primary: '#ef4444', secondary: '#f1f5f9' } } }} />
     </div>
   );
 }

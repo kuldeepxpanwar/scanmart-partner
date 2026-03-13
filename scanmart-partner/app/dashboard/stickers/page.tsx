@@ -4,8 +4,9 @@ import { supabase } from "@/lib/supabase";
 import Barcode from "react-barcode";
 import {
   Search, Printer, Plus, Minus, X, ScanBarcode,
-  Store, Scale, ToggleLeft, ToggleRight, Tag, Layers
+  Store, Scale, ToggleLeft, ToggleRight, Tag, Layers, Trash2
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 type PrintMode = "sticker" | "shelf";
 type ShelfTemplate = "regular" | "sale" | "bogo" | "new";
@@ -18,6 +19,7 @@ export default function StickerPage() {
   const [loading, setLoading] = useState(true);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [showPrice, setShowPrice] = useState(true);
+  const [popupBlocked, setPopupBlocked] = useState(false);
   const [storeName, setStoreName] = useState("SCANMART");
 
   const [weightMode, setWeightMode] = useState(false);
@@ -80,6 +82,7 @@ export default function StickerPage() {
     setPrintQueue(prev => prev.map(i => i.id === id ? { ...i, copies: Math.max(1, i.copies + delta) } : i));
   const removeFromQueue = (id: string) =>
     setPrintQueue(prev => prev.filter(i => i.id !== id));
+  const clearQueue = () => { setPrintQueue([]); toast.success("Queue cleared!"); };
 
   const handlePrint = () => {
     if (!printQueue.length) { alert("Select items first!"); return; }
@@ -102,7 +105,7 @@ export default function StickerPage() {
           <div class="label sticker-label">
             <p class="store-name">${storeName}</p>
             <p class="product-name">${name}</p>
-            ${item.isWeightItem ? `<p class="weight-info">${item.weightGrams}g</p>` : ""}
+            ${item.isWeightItem ? `<p class="weight-info">${item.weightGrams}g @ &#8377;${item.ratePerKg || item.price}/kg</p>` : ""}
             <svg class="barcode" data-value="${bc}"></svg>
             ${showPrice ? `<p class="price">&#8377;${price.toFixed(0)}</p>` : ""}
           </div>`;
@@ -241,7 +244,8 @@ export default function StickerPage() {
 </html>`;
 
     const win = window.open("", "_blank", "width=900,height=700");
-    if (!win) { alert("Popup blocked! Please allow popups for this site and try again."); return; }
+    if (!win) { setPopupBlocked(true); return; }
+    setPopupBlocked(false);
     win.document.open();
     win.document.write(html);
     win.document.close();
@@ -453,9 +457,26 @@ export default function StickerPage() {
               className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shrink-0">
               <Printer size={16} /> PRINT
             </button>
+            {printQueue.length > 0 && (
+              <button onClick={clearQueue}
+                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs">
+                <Trash2 size={13} /> Clear
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Popup blocked warning */}
+        {popupBlocked && (
+          <div className="mx-5 mt-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+            <span className="text-amber-400 text-lg">⚠️</span>
+            <div>
+              <p className="text-amber-400 font-bold text-xs">Popup Blocked!</p>
+              <p className="text-slate-400 text-xs mt-0.5">Click the popup icon in your browser address bar and select <b>"Always allow"</b>, then try printing again.</p>
+            </div>
+            <button onClick={() => setPopupBlocked(false)} className="ml-auto text-slate-500 hover:text-white"><X size={14} /></button>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
           {printQueue.length === 0 && (
             <div className="col-span-full flex flex-col items-center justify-center text-slate-600 mt-20">
