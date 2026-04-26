@@ -130,6 +130,12 @@ export default function InventoryPage() {
   const [newBatch, setNewBatch] = useState({ batch_number: '', expiry_date: '', quantity: '', buying_price: '' });
   const [batchSaving, setBatchSaving] = useState(false);
 
+  // 💊 Pharmacy Import State
+  const [importMode, setImportMode] = useState<'basic' | 'pharmacy'>('basic');
+  const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [importSupplierName, setImportSupplierName] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+
   // Dropdown State
   const [isReportMenuOpen, setIsReportMenuOpen] = useState(false);
 
@@ -418,6 +424,112 @@ export default function InventoryPage() {
       }
     };
     reader.readAsText(file);
+  };
+
+  // --- 💊 PHARMACY CSV IMPORT ---
+  const parseExpiry = (raw: string): string => {
+    const clean = (raw || '').trim();
+    if (!clean) return '';
+    const parts = clean.split('/');
+    if (parts.length === 2) {
+      const month = parts[0].padStart(2, '0');
+      const year = parts[1].length === 2 ? `20${parts[1]}` : parts[1];
+      return `${year}-${month}-01`;
+    }
+    return clean;
+  };
+
+  const handlePharmacyFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeStoreId) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { toast.error('CSV empty or header only'); return; }
+      const rows = lines.slice(1).map(line => {
+        const cols = line.split(',');
+        const qty = Number(cols[2]?.trim()) || 0;
+        const qtyFree = Number(cols[3]?.trim()) || 0;
+        const totalStock = qty + qtyFree;
+        const rate = Number(cols[7]?.trim()) || 0;
+        const effectiveCost = totalStock > 0 ? Math.round((qty * rate / totalStock) * 100) / 100 : rate;
+        const sgst = Number(cols[9]?.trim()) || 0;
+        const cgst = Number(cols[10]?.trim()) || 0;
+        return {
+          product_name: cols[0]?.trim() || '',
+          hsn: cols[1]?.trim() || '3004',
+          qty, qty_free: qtyFree, total_stock: totalStock,
+          batch_no: cols[4]?.trim() || '',
+          expiry_raw: cols[5]?.trim() || '',
+          expiry_date: parseExpiry(cols[5]?.trim() || ''),
+          mrp: Number(cols[6]?.trim()) || 0,
+          rate, effective_cost: effectiveCost,
+          discount: Number(cols[8]?.trim()) || 0,
+          gst_rate: sgst + cgst,
+          supplier_name: cols[11]?.trim() || '',
+        };
+      }).filter(r => r.product_name && r.total_stock > 0);
+      if (rows.length === 0) { toast.error('No valid rows found. Check CSV format.'); return; }
+      setImportPreview(rows);
+      if (rows[0]?.supplier_name) setImportSupplierName(rows[0].supplier_name);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmPharmacyImport = async () => {
+    if (!activeStoreId || importPreview.length === 0) return;
+    setIsImporting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let supplierId: string | null = null;
+      if (importSupplierName.trim()) {
+        const { data: existing } = await supabase.from('suppliers').select('id')
+          .eq('name', importSupplierName.trim()).eq('store_id', activeStoreId).maybeSingle();
+        if (existing) {
+          supplierId = existing.id;
+        } else {
+          const { data: ns } = await supabase.from('suppliers')
+            .insert({ name: importSupplierName.trim(), store_id: activeStoreId, owner_id: user?.id })
+            .select('id').single();
+          supplierId = ns?.id || null;
+        }
+      }
+      let newCount = 0, updateCount = 0;
+      for (const row of importPreview) {
+        const { data: existingProd } = await supabase.from('inventory').select('id, stock')
+          .eq('name', row.product_name).eq('store_id', activeStoreId).eq('is_active', true).maybeSingle();
+        let productId = '';
+        if (existingProd) {
+          await supabase.from('inventory').update({
+            stock: existingProd.stock + row.total_stock,
+            buying_price: row.effective_cost, mrp: row.mrp, price: row.mrp,
+            ...(supplierId ? { supplier_id: supplierId } : {}),
+          }).eq('id', existingProd.id);
+          productId = existingProd.id; updateCount++;
+        } else {
+          const { data: np } = await supabase.from('inventory').insert({
+            name: row.product_name, stock: row.total_stock,
+            mrp: row.mrp, price: row.mrp, buying_price: row.effective_cost,
+            gst_rate: row.gst_rate || 5, category: 'Pharmacy',
+            store_id: activeStoreId, supplier_id: supplierId, is_active: true, last_sold_at: null,
+          }).select('id').single();
+          productId = np?.id || ''; newCount++;
+        }
+        if (productId && row.batch_no && row.expiry_date) {
+          await supabase.from('inventory_batches').insert({
+            product_id: productId, store_id: activeStoreId,
+            batch_number: row.batch_no, expiry_date: row.expiry_date,
+            quantity: row.total_stock, buying_price: row.effective_cost,
+          });
+        }
+      }
+      toast.success(`✅ ${newCount} new + ${updateCount} updated!`);
+      setImportPreview([]); setImportSupplierName('');
+      setIsImportOpen(false); fetchData(); fetchSuppliers();
+    } catch (err: any) {
+      toast.error('Import failed: ' + (err.message || 'Unknown error'));
+    } finally { setIsImporting(false); }
   };
 
   // --- 🚛 TRANSFER LOGIC ---
@@ -1050,27 +1162,176 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* 🟡 IMPORT MODAL */}
+      {/* \ud83d\udfe1 IMPORT MODAL — Basic + Pharmacy */}
       {isImportOpen && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-slate-900 border border-slate-800 p-10 rounded-[2.5rem] w-full max-w-lg text-center shadow-2xl relative">
-            <button onClick={() => setIsImportOpen(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><XCircle /></button>
-            <Upload size={50} className="mx-auto text-blue-500 mb-6" />
-            <h2 className="text-2xl font-bold mb-2">Bulk Import</h2>
-            <p className="text-slate-500 text-xs mb-6">Select .csv file to upload multiple items</p>
-            <div className="text-left bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6">
-              <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 flex items-center gap-1"><Info size={12} /> Required CSV Format</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[10px] text-slate-400">
-                  <thead className="text-white border-b border-slate-800">
-                    <tr><th className="py-1 pr-2">Name</th><th className="py-1 pr-2">Category</th><th className="py-1 pr-2">Barcode</th><th className="py-1 pr-2">MRP</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">BuyPrice</th><th className="py-1 pr-2">Stock</th><th className="py-1">GST</th></tr>
-                  </thead>
-                  <tbody><tr><td className="py-1">Parle G</td><td>Biscuits</td><td>890...</td><td>10</td><td>10</td><td>8</td><td>100</td><td>18</td></tr></tbody>
-                </table>
-              </div>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-start justify-center z-[100] p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] w-full max-w-3xl shadow-2xl my-8">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-slate-800">
+              <h2 className="text-xl font-black uppercase italic flex items-center gap-2 text-blue-400">
+                <Upload size={20} /> Bulk Import
+              </h2>
+              <button onClick={() => { setIsImportOpen(false); setImportPreview([]); setImportSupplierName(''); }}
+                className="bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={20} /></button>
             </div>
-            <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" id="csv-upload" />
-            <label htmlFor="csv-upload" className="block w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-2xl font-black cursor-pointer transition-all">CHOOSE FILE</label>
+
+            {/* Tabs */}
+            <div className="flex gap-1 p-4 border-b border-slate-800 bg-slate-950/40">
+              <button onClick={() => { setImportMode('basic'); setImportPreview([]); }}
+                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${importMode === 'basic' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                📦 Basic CSV
+              </button>
+              <button onClick={() => { setImportMode('pharmacy'); setImportPreview([]); }}
+                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${importMode === 'pharmacy' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                💊 Pharmacy Bill CSV
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* BASIC MODE */}
+              {importMode === 'basic' && (
+                <div className="text-center space-y-6">
+                  <div className="text-left bg-slate-950 p-4 rounded-xl border border-slate-800">
+                    <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 flex items-center gap-1"><Info size={12} /> Basic CSV Format</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px] text-slate-400">
+                        <thead className="text-white border-b border-slate-800">
+                          <tr><th className="py-1 pr-2">Name</th><th className="py-1 pr-2">Category</th><th className="py-1 pr-2">Barcode</th><th className="py-1 pr-2">MRP</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">BuyPrice</th><th className="py-1 pr-2">Stock</th><th className="py-1">GST</th></tr>
+                        </thead>
+                        <tbody><tr><td className="py-1">Paracetamol</td><td>Pharmacy</td><td>-</td><td>10</td><td>10</td><td>6</td><td>100</td><td>5</td></tr></tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" id="csv-basic-upload" />
+                  <label htmlFor="csv-basic-upload" className="block w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-2xl font-black cursor-pointer transition-all text-sm uppercase tracking-widest">
+                    📂 Choose Basic CSV File
+                  </label>
+                </div>
+              )}
+
+              {/* PHARMACY MODE */}
+              {importMode === 'pharmacy' && (
+                <div className="space-y-5">
+                  {/* Format Guide */}
+                  <div className="bg-slate-950 p-4 rounded-xl border border-green-900/40">
+                    <h4 className="text-[10px] font-bold uppercase text-green-400 mb-3 flex items-center gap-1">
+                      <Info size={12} /> Pharmacy CSV Format (Gemini se banao ya distributor se lo)
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[9px] text-slate-400">
+                        <thead className="text-green-400 border-b border-slate-800">
+                          <tr>
+                            {['product_name','hsn','qty','qty_free','batch_no','expiry','mrp','rate','discount','sgst','cgst','supplier_name'].map(h => (
+                              <th key={h} className="py-1 pr-2 text-left font-bold">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="text-slate-500">
+                            <td className="py-1 pr-2">LEGITEM-100 TAB 10</td>
+                            <td className="pr-2">3004</td><td className="pr-2">30</td><td className="pr-2">30</td>
+                            <td className="pr-2">SPI251924</td><td className="pr-2">5/27</td>
+                            <td className="pr-2">70.31</td><td className="pr-2">53.91</td>
+                            <td className="pr-2">3</td><td className="pr-2">2.5</td><td className="pr-2">2.5</td>
+                            <td>Parshuram Pharma</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-2">💡 Tip: Bill ki photo Gemini ko do → "Convert to Excel/CSV" bolo → Download karo → Upload karo</p>
+                  </div>
+
+                  {/* Upload Button (show only if no preview) */}
+                  {importPreview.length === 0 && (
+                    <>
+                      <input type="file" accept=".csv" onChange={handlePharmacyFileUpload} className="hidden" id="csv-pharma-upload" />
+                      <label htmlFor="csv-pharma-upload" className="block w-full bg-green-600 hover:bg-green-700 py-4 rounded-2xl font-black cursor-pointer transition-all text-center text-sm uppercase tracking-widest">
+                        💊 Choose Pharmacy Bill CSV
+                      </label>
+                    </>
+                  )}
+
+                  {/* PREVIEW TABLE */}
+                  {importPreview.length > 0 && (
+                    <div className="space-y-4">
+                      {/* Supplier Row */}
+                      <div className="flex items-center gap-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                        <Truck size={16} className="text-green-400 shrink-0" />
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Supplier:</span>
+                        <input
+                          type="text" value={importSupplierName}
+                          onChange={e => setImportSupplierName(e.target.value)}
+                          placeholder="Supplier name (auto-saved)"
+                          className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm font-bold outline-none focus:border-green-500"
+                        />
+                        <span className="text-[9px] text-green-400 font-bold uppercase">Auto-Save ✅</span>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="flex gap-3">
+                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex-1 text-center">
+                          <p className="text-2xl font-black text-blue-400">{importPreview.length}</p>
+                          <p className="text-[9px] font-bold uppercase text-slate-500">Items</p>
+                        </div>
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 flex-1 text-center">
+                          <p className="text-2xl font-black text-green-400">{importPreview.reduce((s, r) => s + r.total_stock, 0)}</p>
+                          <p className="text-[9px] font-bold uppercase text-slate-500">Total Stock</p>
+                        </div>
+                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 flex-1 text-center">
+                          <p className="text-2xl font-black text-orange-400">₹{importPreview.reduce((s, r) => s + (r.qty * r.rate), 0).toFixed(0)}</p>
+                          <p className="text-[9px] font-bold uppercase text-slate-500">Bill Amount</p>
+                        </div>
+                      </div>
+
+                      {/* Preview Table */}
+                      <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-72 overflow-y-auto">
+                        <table className="w-full text-[10px]">
+                          <thead className="bg-slate-950 text-slate-400 font-bold uppercase sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Product</th>
+                              <th className="px-3 py-2 text-center">Qty</th>
+                              <th className="px-3 py-2 text-center">Free</th>
+                              <th className="px-3 py-2 text-center font-black text-green-400">+Stock</th>
+                              <th className="px-3 py-2 text-left">Batch</th>
+                              <th className="px-3 py-2 text-left">Expiry</th>
+                              <th className="px-3 py-2 text-right">MRP</th>
+                              <th className="px-3 py-2 text-right">Eff.Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importPreview.map((row, i) => (
+                              <tr key={i} className="border-t border-slate-800 hover:bg-slate-800/30">
+                                <td className="px-3 py-2 font-bold text-white max-w-[180px] truncate">{row.product_name}</td>
+                                <td className="px-3 py-2 text-center text-slate-400">{row.qty}</td>
+                                <td className="px-3 py-2 text-center text-green-400 font-bold">+{row.qty_free}</td>
+                                <td className="px-3 py-2 text-center font-black text-green-300">{row.total_stock}</td>
+                                <td className="px-3 py-2 text-slate-400 font-mono">{row.batch_no || '-'}</td>
+                                <td className="px-3 py-2 text-orange-400">{row.expiry_raw || '-'}</td>
+                                <td className="px-3 py-2 text-right text-white">₹{row.mrp}</td>
+                                <td className="px-3 py-2 text-right text-blue-400">₹{row.effective_cost}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3">
+                        <button onClick={() => { setImportPreview([]); setImportSupplierName(''); }}
+                          className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-black text-xs uppercase transition-all text-slate-400">
+                          ← Re-upload
+                        </button>
+                        <button onClick={handleConfirmPharmacyImport} disabled={isImporting}
+                          className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
+                          {isImporting ? <Loader2 size={16} className="animate-spin" /> : <PackagePlus size={16} />}
+                          {isImporting ? 'Importing...' : `✅ Import All ${importPreview.length} Items`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
