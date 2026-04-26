@@ -54,7 +54,25 @@ interface InventoryItem {
   shop_id: string | null;
   is_active: boolean;
   sales_count?: number;
+  // 💊 Multi-unit fields
+  pack_size?: number;
+  strip_size?: number;
+  sell_unit?: string;
 }
+
+// 💊 Category-based packaging defaults
+const CATEGORY_PACKAGING: Record<string, { pack_size: number; strip_size: number; sell_unit: string }> = {
+  'Tablet': { pack_size: 10, strip_size: 10, sell_unit: 'strip' },
+  'Capsule': { pack_size: 10, strip_size: 10, sell_unit: 'strip' },
+  'Syrup': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
+  'Injection': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
+  'Ointment': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
+  'Cream': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
+  'Drops': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
+  'Sachet': { pack_size: 1, strip_size: 10, sell_unit: 'strip' },
+  'Pharmacy': { pack_size: 10, strip_size: 10, sell_unit: 'strip' },
+  'General': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
+};
 
 interface StoreType {
   id: string;
@@ -171,6 +189,11 @@ export default function InventoryPage() {
     buying_price: "",
     gst_rate: "18",
     discount_percent: "0", // 🔥 Discount field
+    // 💊 Multi-unit packaging
+    pack_size: "1",
+    strip_size: "1",
+    sell_unit: "piece",
+    stock_boxes: "", // User enters boxes, we convert to tablets
   });
   const [editItem, setEditItem] = useState<any>(null);
 
@@ -305,13 +328,21 @@ export default function InventoryPage() {
     );
   };
 
-  // --- 🟢 ADD PRODUCT (Fixed for Multi-Store) ---
+  // --- 🟢 ADD PRODUCT (Fixed for Multi-Store + Multi-Unit) ---
   const handleAddItem = async () => {
     if (!newItem.name || !newItem.price) return alert("Name & Price required!");
     if (!activeStoreId) return alert("No active store selected!");
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // 💊 Calculate total stock in tablets (smallest unit)
+    const packSize = Number(newItem.pack_size) || 1;
+    const stripSize = Number(newItem.strip_size) || 1;
+    const stockBoxes = Number(newItem.stock_boxes) || 0;
+    const manualStock = Number(newItem.stock) || 0;
+    // If user entered boxes, convert to tablets. Otherwise use manual stock.
+    const totalStock = stockBoxes > 0 ? stockBoxes * packSize * stripSize : manualStock;
 
     const { error } = await supabase.from("inventory").insert([
       {
@@ -320,14 +351,18 @@ export default function InventoryPage() {
         mrp: Number(newItem.mrp) || Number(newItem.price),
         buying_price: Number(newItem.buying_price) || 0,
         gst_rate: Number(newItem.gst_rate) || 18,
-        stock: Number(newItem.stock) || 0,
+        stock: totalStock,
         category: newItem.category,
         barcode: newItem.barcode || null,
         image: newItem.image || null,
-        supplier_id: newItem.supplier_id || null, // 🔥 Save Supplier
+        supplier_id: newItem.supplier_id || null,
         store_id: activeStoreId,
-        last_sold_at: null, // 🔥 BUG FIX: New products have no sales history
-        is_active: true
+        last_sold_at: null,
+        is_active: true,
+        // 💊 Multi-unit fields
+        pack_size: packSize,
+        strip_size: stripSize,
+        sell_unit: newItem.sell_unit || 'piece',
       },
     ]);
     if (error) toast.error(error.message);
@@ -335,7 +370,7 @@ export default function InventoryPage() {
       setIsAddOpen(false);
       resetForm();
       fetchData();
-      toast.success("Product added!");
+      toast.success(`Product added! Stock: ${totalStock} units`);
     }
   };
 
@@ -344,6 +379,7 @@ export default function InventoryPage() {
       name: "", price: "", mrp: "", stock: "", category: "General",
       barcode: "", image: "", supplier_id: "", buying_price: "", gst_rate: "18",
       discount_percent: "0",
+      pack_size: "1", strip_size: "1", sell_unit: "piece", stock_boxes: "",
     });
   };
 
@@ -364,6 +400,10 @@ export default function InventoryPage() {
         barcode: editItem.barcode || null,
         image: editItem.image || null,
         supplier_id: editItem.supplier_id || null,
+        // 💊 Multi-unit fields
+        pack_size: Number(editItem.pack_size) || 1,
+        strip_size: Number(editItem.strip_size) || 1,
+        sell_unit: editItem.sell_unit || 'piece',
       })
       .eq("id", editItem.id);
 
@@ -918,7 +958,17 @@ export default function InventoryPage() {
                         {!showArchived && <div className="text-[10px] text-green-500 font-bold">+₹{margin} Profit</div>}
                       </td>
                       <td className="p-5">
-                        <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${item.stock < 10 ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>{item.stock} UNITS</span>
+                        {(() => {
+                          const ps = Number(item.pack_size) || 1;
+                          const ss = Number(item.strip_size) || 1;
+                          const isTablet = ps > 1 || ss > 1;
+                          const strips = isTablet ? Math.floor(item.stock / ss) : item.stock;
+                          const loose = isTablet ? item.stock % ss : 0;
+                          const label = isTablet
+                            ? `${strips}s${loose > 0 ? `+${loose}t` : ''}`
+                            : `${item.stock}`;
+                          return <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${item.stock < 10 ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>{label} {isTablet ? 'strips' : 'UNITS'}</span>;
+                        })()}
                       </td>
                       <td className="p-5 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -1109,14 +1159,92 @@ export default function InventoryPage() {
                 />
               </div>
 
+              {/* 💊 Category + Packaging Auto-Defaults */}
+              <div>
+                <label className="text-[10px] font-bold uppercase text-purple-400 mb-1 block">📦 Category (auto-sets packaging)</label>
+                <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer"
+                  value={newItem.category}
+                  onChange={(e) => {
+                    const cat = e.target.value;
+                    const defaults = CATEGORY_PACKAGING[cat] || CATEGORY_PACKAGING['General'];
+                    setNewItem({
+                      ...newItem,
+                      category: cat,
+                      pack_size: String(defaults.pack_size),
+                      strip_size: String(defaults.strip_size),
+                      sell_unit: defaults.sell_unit,
+                    });
+                  }}
+                >
+                  {Object.keys(CATEGORY_PACKAGING).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 💊 Packaging: Pack Size + Strip Size */}
+              {(Number(newItem.pack_size) > 1 || Number(newItem.strip_size) > 1 || newItem.category === 'Tablet' || newItem.category === 'Capsule' || newItem.category === 'Pharmacy') && (
+                <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 space-y-2">
+                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">📦 Packaging Details</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Strips/Box</label>
+                      <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500"
+                        value={newItem.pack_size}
+                        onChange={(e) => setNewItem({ ...newItem, pack_size: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Tabs/Strip</label>
+                      <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500"
+                        value={newItem.strip_size}
+                        onChange={(e) => setNewItem({ ...newItem, strip_size: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Sell As</label>
+                      <select className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold outline-none focus:border-purple-500 cursor-pointer"
+                        value={newItem.sell_unit}
+                        onChange={(e) => setNewItem({ ...newItem, sell_unit: e.target.value })}
+                      >
+                        <option value="box">📦 Box</option>
+                        <option value="strip">💊 Strip</option>
+                        <option value="tablet">💉 Tablet</option>
+                      </select>
+                    </div>
+                  </div>
+                  {/* 💊 Boxes input → auto-convert */}
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase">Boxes in Stock</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="0" placeholder="e.g. 2"
+                        className="w-24 bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-400 font-bold text-center outline-none focus:border-purple-500"
+                        value={newItem.stock_boxes}
+                        onChange={(e) => {
+                          const boxes = Number(e.target.value) || 0;
+                          const total = boxes * (Number(newItem.pack_size) || 1) * (Number(newItem.strip_size) || 1);
+                          setNewItem({ ...newItem, stock_boxes: e.target.value, stock: String(total) });
+                        }}
+                      />
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        = {Number(newItem.stock) || 0} tablets total
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
-                <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.mrp} onChange={e => setNewItem({ ...newItem, mrp: e.target.value })} />
-                <input type="number" placeholder="Price" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.price} onChange={e => setNewItem({ ...newItem, price: e.target.value })} />
+                <input type="number" placeholder="MRP (per strip)" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.mrp} onChange={e => setNewItem({ ...newItem, mrp: e.target.value })} />
+                <input type="number" placeholder="Price (per strip)" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.price} onChange={e => setNewItem({ ...newItem, price: e.target.value })} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="Buy Price" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.buying_price} onChange={e => setNewItem({ ...newItem, buying_price: e.target.value })} />
-                <input type="number" placeholder="Stock" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.stock} onChange={e => setNewItem({ ...newItem, stock: e.target.value })} />
+                {/* Only show manual stock if packaging section is hidden */}
+                {!(Number(newItem.pack_size) > 1 || Number(newItem.strip_size) > 1 || newItem.category === 'Tablet' || newItem.category === 'Capsule' || newItem.category === 'Pharmacy') && (
+                  <input type="number" placeholder="Stock" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.stock} onChange={e => setNewItem({ ...newItem, stock: e.target.value })} />
+                )}
               </div>
 
               {/* 🔥 Supplier & GST Dropdown */}

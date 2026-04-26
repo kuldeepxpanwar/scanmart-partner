@@ -1,15 +1,23 @@
 import { useState } from 'react';
 
+export type SellUnit = 'box' | 'strip' | 'tablet' | 'piece';
+
 export interface CartItem {
     id: string;
     name: string;
-    price: number;
-    mrp: number;
+    price: number;        // price per selected unit
+    mrp: number;          // MRP per strip (original)
     quantity: number;
-    stock: number;
+    stock: number;        // total stock in tablets (smallest unit)
     barcode?: string;
     buying_price?: number;
     gst_rate?: number;
+    // 💊 Multi-unit fields
+    pack_size: number;    // strips per box
+    strip_size: number;   // tablets per strip
+    sell_unit: SellUnit;  // current selling unit for this cart item
+    base_price: number;   // original price per strip from inventory
+    base_mrp: number;     // original MRP per strip from inventory
 }
 
 export interface HoldBill {
@@ -30,19 +38,71 @@ export function useCart(products: any[]) {
     const [totalSpent, setTotalSpent] = useState(0);
 
     // --- CART OPERATIONS ---
-    const addToCart = (product: any) => {
+    // 💊 Calculate price for a given unit
+    const getUnitPrice = (basePrice: number, packSize: number, stripSize: number, unit: SellUnit) => {
+        switch (unit) {
+            case 'box': return basePrice * packSize;
+            case 'strip': return basePrice;
+            case 'tablet': return Math.round((basePrice / stripSize) * 100) / 100;
+            case 'piece': return basePrice;
+            default: return basePrice;
+        }
+    };
+
+    // 💊 How many tablets does 1 unit of this type represent?
+    const getTabletsPerUnit = (packSize: number, stripSize: number, unit: SellUnit) => {
+        switch (unit) {
+            case 'box': return packSize * stripSize;
+            case 'strip': return stripSize;
+            case 'tablet': return 1;
+            case 'piece': return 1;
+            default: return stripSize;
+        }
+    };
+
+    const addToCart = (product: any, unitOverride?: SellUnit) => {
+        const packSize = Number(product.pack_size) || 1;
+        const stripSize = Number(product.strip_size) || 1;
+        const defaultUnit: SellUnit = unitOverride || product.sell_unit || 'strip';
+        const basePrice = Number(product.price || 0);
+        const baseMrp = Number(product.mrp || product.price || 0);
+
         setCart((prev) => {
             const existing = prev.find((item) => item.id === product.id);
             if (existing) {
-                if (existing.quantity >= product.stock) return prev;
+                // Stock check in tablets
+                const tabletsPerUnit = getTabletsPerUnit(existing.pack_size, existing.strip_size, existing.sell_unit);
+                const newTablets = (existing.quantity + 1) * tabletsPerUnit;
+                if (newTablets > product.stock) return prev;
                 return prev.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
             }
+
+            const unitPrice = getUnitPrice(basePrice, packSize, stripSize, defaultUnit);
+            const unitMrp = getUnitPrice(baseMrp, packSize, stripSize, defaultUnit);
+
             return [...prev, {
                 ...product,
-                mrp: Number(product.mrp || product.price),
-                quantity: 1
+                price: unitPrice,
+                mrp: unitMrp,
+                quantity: 1,
+                pack_size: packSize,
+                strip_size: stripSize,
+                sell_unit: defaultUnit,
+                base_price: basePrice,
+                base_mrp: baseMrp,
             }];
         });
+    };
+
+    // 💊 Change sell unit for an item already in cart
+    const changeCartItemUnit = (id: string, newUnit: SellUnit) => {
+        setCart((prev) => prev.map((item) => {
+            if (item.id !== id) return item;
+            const newPrice = getUnitPrice(item.base_price, item.pack_size, item.strip_size, newUnit);
+            const newMrp = getUnitPrice(item.base_mrp, item.pack_size, item.strip_size, newUnit);
+            // Reset quantity to 1 when changing unit to avoid stock overflow
+            return { ...item, sell_unit: newUnit, price: newPrice, mrp: newMrp, quantity: 1 };
+        }));
     };
 
     const updateQuantity = (id: string, delta: number) => {
@@ -51,8 +111,13 @@ export function useCart(products: any[]) {
                 if (item.id === id) {
                     const newQty = item.quantity + delta;
                     if (newQty <= 0) return null; // Mark for removal
-                    const product = products.find((p) => p.id === id);
-                    if (product && newQty > product.stock) return item; // Limit to stock
+                    // 💊 Stock check in tablets (smallest unit)
+                    const product = products.find((p: any) => p.id === id);
+                    if (product) {
+                        const tabletsPerUnit = getTabletsPerUnit(item.pack_size, item.strip_size, item.sell_unit);
+                        const totalTablets = newQty * tabletsPerUnit;
+                        if (totalTablets > product.stock) return item; // Over stock
+                    }
                     return { ...item, quantity: newQty };
                 }
                 return item;
@@ -136,6 +201,8 @@ export function useCart(products: any[]) {
         updateQuantity,
         removeFromCart,
         clearCart,
+        changeCartItemUnit,
+        getTabletsPerUnit,
         discountValue,
         setDiscountValue,
         discountType,

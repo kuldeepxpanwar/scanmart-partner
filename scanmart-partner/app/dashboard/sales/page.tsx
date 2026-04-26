@@ -52,6 +52,7 @@ export default function SalesPage() {
   // --- CUSTOM HOOK FOR CART ---
   const {
     cart, addToCart, updateQuantity, removeFromCart, clearCart,
+    changeCartItemUnit, getTabletsPerUnit,
     discountValue, setDiscountValue, discountType, setDiscountType,
     subTotal, totalSavings, finalTotal, discountAmount,
     phone, setPhone, name, setName, totalSpent, setTotalSpent,
@@ -313,15 +314,17 @@ export default function SalesPage() {
       const { error: itemsInsertError } = await supabase.from("sale_items").insert(saleItemsData);
       if (itemsInsertError) console.error("sale_items insert error:", itemsInsertError?.message || itemsInsertError);
 
-      // ✅ FIX: Atomic stock decrement via RPC — prevents race condition when 2 cashiers checkout simultaneously
+      // ✅ FIX: Atomic stock decrement via RPC — deduct in tablets (smallest unit)
       for (const item of cart) {
+        // 💊 Calculate tablets to deduct based on sell unit
+        const tabletsPerUnit = getTabletsPerUnit(item.pack_size, item.strip_size, item.sell_unit);
+        const totalTablets = item.quantity * tabletsPerUnit;
         const { error: stockErr } = await supabase.rpc("decrement_stock", {
           p_product_id: item.id,
-          p_quantity: item.quantity,
+          p_quantity: totalTablets,
         });
         if (stockErr) {
           console.error(`[Checkout] Stock decrement failed for ${item.name}:`, stockErr.message);
-          // Non-fatal: sale is already recorded — log for manual reconciliation
         }
       }
 
@@ -526,6 +529,7 @@ export default function SalesPage() {
             searchTerm={searchTerm}
             updateQuantity={updateQuantity}
             removeFromCart={removeFromCart}
+            changeCartItemUnit={changeCartItemUnit}
           />
 
           {/* ⚡ Quick Products Grid — cart empty hone par dikhao */}
@@ -535,7 +539,12 @@ export default function SalesPage() {
                 <Zap size={10} className="text-yellow-500" /> Quick Add — Top Products
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {products.slice(0, 12).map(p => (
+                {products.slice(0, 12).map(p => {
+                  const ss = Number(p.strip_size) || 1;
+                  const stockLabel = ss > 1
+                    ? `${Math.floor(p.stock / ss)}s+${p.stock % ss}t`
+                    : `${p.stock}`;
+                  return (
                   <button
                     key={p.id}
                     onClick={() => addToCart(p)}
@@ -543,9 +552,10 @@ export default function SalesPage() {
                   >
                     <p className="text-[10px] font-black text-gray-800 truncate group-hover:text-blue-700 leading-tight">{p.name}</p>
                     <p className="text-[11px] font-black text-blue-600 mt-1">₹{p.price}</p>
-                    <p className="text-[8px] text-gray-400">Stock: {p.stock}</p>
+                    <p className="text-[8px] text-gray-400">Stock: {stockLabel}</p>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
