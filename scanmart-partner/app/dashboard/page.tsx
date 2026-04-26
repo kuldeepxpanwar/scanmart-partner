@@ -182,7 +182,14 @@ export default function DashboardHome() {
         setStaffName(matchedStaff.name || "");
         setIsLocked(false);
         setPin("");
-        fetchDashboardData(matchedStaff.role, matchedStaff.id, matchedStaff.store_id);
+
+        // 🔥 FIX: Sync active_store_id to owner's actual store (prevent stale/cross-account ID)
+        const correctStoreId = matchedStaff.store_id || (ownerStoreIds.length > 0 ? ownerStoreIds[0] : activeStoreId);
+        if (correctStoreId && correctStoreId !== activeStoreId) {
+          localStorage.setItem("active_store_id", correctStoreId);
+          setActiveStoreId(correctStoreId);
+        }
+        fetchDashboardData(matchedStaff.role, matchedStaff.id, correctStoreId || matchedStaff.store_id);
       } else {
         const newAttempts = pinAttempts + 1;
         setPinAttempts(newAttempts);

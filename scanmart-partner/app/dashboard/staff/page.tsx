@@ -164,14 +164,16 @@ export default function StaffPage() {
       return alert("Please fill all details correctly.");
     }
 
-    // Owner gets assigned to the first available store or creates one implicitly
-    // Ideally, store creation happens next, so we leave store_id null initially or trigger DB trigger
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+
     const hashedPin = await hashPin(ownerDetails.pin_code);
     const { error } = await supabase.from("staff").insert([{
       name: ownerDetails.name,
       phone: ownerDetails.phone,
       role: "admin",
       pin_code: hashedPin,
+      shop_id: authUser?.id || null,       // 🔥 FIX: RLS fallback — owner can always see this record
+      store_id: activeStoreId || null,      // 🔥 FIX: Direct store link for proper scoping
       is_active: true
     }]);
 

@@ -119,15 +119,38 @@ export default function SettingsPage() {
 
     const handlePinSubmit = async () => {
         if (pin.length < 4) return setPinError("PIN must be 4-6 digits");
-        // BUG 1 FIX: Pehle plain text match tha — ab verifyPin() (bcrypt) use hoga
-        //            Warna hashed PINs kabhi match nahi karte the
-        const { data: adminStaff } = await supabase
-            .from("staff")
-            .select("*")
-            .eq("role", "admin")
-            .eq("is_active", true);
 
-        if (!adminStaff || adminStaff.length === 0) {
+        // 🔥 FIX: Scope admin fetch to owner's stores only (prevent cross-account match)
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        let ownerStoreIds: string[] = [];
+        if (authUser) {
+            const { data: ownedStores } = await supabase.from("stores").select("id").eq("owner_id", authUser.id);
+            ownerStoreIds = (ownedStores || []).map((s: any) => s.id);
+        }
+
+        // Fetch admins: by store_id (linked) OR by shop_id = auth.uid (owner fallback)
+        let adminStaff: any[] = [];
+        if (ownerStoreIds.length > 0) {
+            const { data } = await supabase
+                .from("staff")
+                .select("*")
+                .eq("role", "admin")
+                .eq("is_active", true)
+                .in("store_id", ownerStoreIds);
+            adminStaff = data || [];
+        }
+        // Fallback: owner record with shop_id = auth.uid (no store_id yet)
+        if (adminStaff.length === 0 && authUser) {
+            const { data } = await supabase
+                .from("staff")
+                .select("*")
+                .eq("role", "admin")
+                .eq("is_active", true)
+                .eq("shop_id", authUser.id);
+            adminStaff = data || [];
+        }
+
+        if (adminStaff.length === 0) {
             setPinError("❌ No admin found");
             return;
         }

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { hashPin } from "@/lib/pin"; // ✅ Fix B: PIN hashing
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Mail, Loader2, Zap, ArrowRight, Store, KeyRound } from "lucide-react";
 
@@ -32,6 +31,7 @@ export default function LoginPage() {
     if (typeof window !== "undefined") {
       sessionStorage.clear();
       localStorage.removeItem("active_staff_id");
+      localStorage.removeItem("active_store_id"); // 🔥 FIX: Clear stale store ID to prevent data mixing
       localStorage.removeItem("sb-auth-token");
     }
   }, []);
@@ -87,38 +87,33 @@ export default function LoginPage() {
 
         if (authError) throw authError;
 
-        // ✅ Step 3a: Check email confirmation FIRST
-        if (authData.user && !authData.session) {
+        // 3. Create Staff Profile linked to Owner ID — no data leak
+        if (authData.user) {
+          const { error: staffError } = await supabase
+            .from('staff')
+            .insert([
+              {
+                id: authData.user.id,
+                name: "Shop Owner",
+                role: "admin",
+                pin_code: pin,
+                is_active: true,
+                shop_id: authData.user.id,
+              }
+            ]);
+
+          if (staffError) {
+            console.error("Staff DB Error:", staffError);
+            throw new Error("Account created but failed to setup Shop Database. Contact Support.");
+          }
+        }
+
+        // 3. Check if email confirmation is required
+        if (authData.user && !authData.user.email_confirmed_at) {
+          // Supabase email confirmation is enabled — show verify email screen
           setSuccessMsg("📬 Check your email! We've sent a verification link. Please verify before logging in.");
           setLoading(false);
           return;
-        }
-
-        // ✅ Step 3b: Session exists — call server-side RPC (bypasses RLS)
-        if (authData.user && authData.session) {
-          const hashedPin = await hashPin(pin);
-
-          // 🚀 Single RPC call: creates store + staff server-side (SECURITY DEFINER)
-          const { data: rpcData, error: rpcError } = await supabase.rpc('setup_new_account', {
-            p_user_id: authData.user.id,
-            p_shop_name: shopName || 'My Store',
-            p_pin_code: hashedPin,
-          });
-
-          if (rpcError) {
-            console.error("RPC Error:", rpcError.message);
-            throw new Error("Account created but failed to setup profile. Contact Support.");
-          }
-
-          if (rpcData?.success === false) {
-            console.error("Setup Error:", rpcData.error);
-            throw new Error("Account created but failed to setup profile: " + rpcData.error);
-          }
-
-          // Save store ID to localStorage for immediate dashboard access
-          if (rpcData?.store_id && typeof window !== 'undefined') {
-            localStorage.setItem('active_store_id', rpcData.store_id);
-          }
         }
 
         setSuccessMsg("🎉 Shop Registered Successfully! Logging you in...");
