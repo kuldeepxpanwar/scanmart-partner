@@ -21,9 +21,21 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
+  -- ✅ Security Fix: Verify product belongs to the calling user's store
+  -- Prevents any authenticated user from decrementing another store's stock
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.inventory i
+    JOIN public.stores s ON s.id = i.store_id
+    WHERE i.id = p_product_id
+      AND s.owner_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Access denied: product does not belong to your store';
+  END IF;
+
   UPDATE public.inventory
   SET
-    stock       = stock - p_quantity,
+    stock        = stock - p_quantity,
     last_sold_at = now()
   WHERE id = p_product_id
     AND stock >= p_quantity;
@@ -35,9 +47,10 @@ BEGIN
 END;
 $$;
 
--- Grant execute to authenticated users
+-- ✅ Only authenticated (logged-in) users can call this function
+-- anon access removed — unauthenticated users cannot decrement stock
 GRANT EXECUTE ON FUNCTION public.decrement_stock(uuid, integer) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.decrement_stock(uuid, integer) TO anon;
+REVOKE EXECUTE ON FUNCTION public.decrement_stock(uuid, integer) FROM anon;
 
 
 -- ============================================================
@@ -175,13 +188,17 @@ CREATE POLICY "customers_by_owner_store" ON public.customers
   );
 
 -- ── Staff ───────────────────────────────────────────────────
+-- ✅ Security Fix: Removed 'OR store_id IS NULL' — that clause allowed
+-- all users to see each other's admin staff records (cross-account bug).
+-- Fallback handled in frontend via shop_id = auth.uid() query.
+DROP POLICY IF EXISTS "staff_by_owner_store" ON public.staff;
 CREATE POLICY "staff_by_owner_store" ON public.staff
   FOR ALL USING (
     store_id IN (
       SELECT id FROM public.stores WHERE owner_id = auth.uid()
     )
-    -- Allow admin staff with no store_id (global admin row for first-time setup)
-    OR store_id IS NULL
+    -- Owner can always see their own admin record (even if store_id is NULL during setup)
+    OR shop_id = auth.uid()
   );
 
 -- ── Supplier Credit Transactions ────────────────────────────
