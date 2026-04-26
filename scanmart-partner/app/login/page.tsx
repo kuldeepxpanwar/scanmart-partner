@@ -88,55 +88,36 @@ export default function LoginPage() {
         if (authError) throw authError;
 
         // ✅ Step 3a: Check email confirmation FIRST
-        // If Supabase requires email confirmation, session is null → auth.uid() = null → RLS blocks DB ops
         if (authData.user && !authData.session) {
           setSuccessMsg("📬 Check your email! We've sent a verification link. Please verify before logging in.");
           setLoading(false);
           return;
         }
 
-        // ✅ Step 3b: Session exists — safe to do DB operations
+        // ✅ Step 3b: Session exists — call server-side RPC (bypasses RLS)
         if (authData.user && authData.session) {
-          // Fix B: Hash PIN before storing
           const hashedPin = await hashPin(pin);
 
-          // Fix C: Create a default store for the new user
-          const { data: storeData, error: storeError } = await supabase
-            .from('stores')
-            .insert([{
-              owner_id: authData.user.id,
-              name: shopName || 'My Store',
-              // Note: is_main_store removed (column may not exist)
-            }])
-            .select('id')
-            .single();
+          // 🚀 Single RPC call: creates store + staff server-side (SECURITY DEFINER)
+          const { data: rpcData, error: rpcError } = await supabase.rpc('setup_new_account', {
+            p_user_id: authData.user.id,
+            p_shop_name: shopName || 'My Store',
+            p_pin_code: hashedPin,
+          });
 
-          if (storeError) {
-            console.error("Store DB Error:", storeError.message, storeError.details);
-            // Non-fatal — staff will still be created with store_id = null
+          if (rpcError) {
+            console.error("RPC Error:", rpcError.message);
+            throw new Error("Account created but failed to setup profile. Contact Support.");
           }
 
-          // Create Staff Profile linked to store
-          const { error: staffError } = await supabase
-            .from('staff')
-            .insert([{
-              id: authData.user.id,
-              name: "Shop Owner",
-              role: "admin",
-              pin_code: hashedPin,
-              is_active: true,
-              shop_id: authData.user.id,
-              store_id: storeData?.id ?? null,
-            }]);
-
-          if (staffError) {
-            console.error("Staff DB Error:", staffError.message, staffError.details, staffError.hint);
-            throw new Error("Account created but failed to setup Staff profile. Contact Support.");
+          if (rpcData?.success === false) {
+            console.error("Setup Error:", rpcData.error);
+            throw new Error("Account created but failed to setup profile: " + rpcData.error);
           }
 
-          // Save store in localStorage for immediate dashboard access
-          if (storeData?.id && typeof window !== 'undefined') {
-            localStorage.setItem('active_store_id', storeData.id);
+          // Save store ID to localStorage for immediate dashboard access
+          if (rpcData?.store_id && typeof window !== 'undefined') {
+            localStorage.setItem('active_store_id', rpcData.store_id);
           }
         }
 
