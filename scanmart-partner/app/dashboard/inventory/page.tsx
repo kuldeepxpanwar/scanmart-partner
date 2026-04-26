@@ -1411,6 +1411,125 @@ export default function InventoryPage() {
                         </div>
                       </div>
 
+                      {/* 🔍 BILL AUDIT SUMMARY */}
+                      {(() => {
+                        // --- Audit Calculations ---
+                        const billSubtotal = importPreview.reduce((s, r) => s + (r.qty * r.rate), 0);
+                        const billGstTotal = importPreview.reduce((s, r) => {
+                          const lineBase = r.qty * r.rate * (1 - (r.discount || 0) / 100);
+                          return s + (lineBase * (r.gst_rate || 0) / 100);
+                        }, 0);
+                        const billGrandTotal = importPreview.reduce((s, r) => {
+                          const lineBase = r.qty * r.rate * (1 - (r.discount || 0) / 100);
+                          return s + lineBase + (lineBase * (r.gst_rate || 0) / 100);
+                        }, 0);
+                        const freeGoodsValue = importPreview.reduce((s, r) => s + (r.qty_free * r.rate), 0);
+
+                        // Duplicate check
+                        const nameCount: Record<string, number> = {};
+                        importPreview.forEach(r => { nameCount[r.product_name] = (nameCount[r.product_name] || 0) + 1; });
+                        const duplicates = Object.entries(nameCount).filter(([, c]) => c > 1);
+
+                        // Rate comparison with existing inventory
+                        const rateFlags = importPreview.map(r => {
+                          const existing = products.find(p => p.name === r.product_name && p.is_active);
+                          if (!existing) return { ...r, flag: 'new', oldRate: 0, diff: 0 };
+                          const diff = r.rate - existing.buying_price;
+                          const pctDiff = existing.buying_price > 0 ? Math.abs(diff / existing.buying_price) * 100 : 0;
+                          if (pctDiff > 10) return { ...r, flag: 'high_diff', oldRate: existing.buying_price, diff, pctDiff };
+                          if (pctDiff > 0) return { ...r, flag: 'minor_diff', oldRate: existing.buying_price, diff, pctDiff };
+                          return { ...r, flag: 'ok', oldRate: existing.buying_price, diff: 0, pctDiff: 0 };
+                        });
+                        const highDiffItems = rateFlags.filter(r => r.flag === 'high_diff');
+                        const newItems = rateFlags.filter(r => r.flag === 'new');
+
+                        // Line-level math check: rate × qty after discount + GST
+                        const lineErrors = importPreview.map((r, i) => {
+                          const base = r.qty * r.rate;
+                          const afterDisc = base * (1 - (r.discount || 0) / 100);
+                          const withGst = afterDisc + (afterDisc * (r.gst_rate || 0) / 100);
+                          return { idx: i + 1, name: r.product_name, base, afterDisc, withGst, effective: r.effective_cost * r.total_stock };
+                        });
+
+                        const issueCount = highDiffItems.length + duplicates.length;
+                        const auditStatus = issueCount > 0 ? 'warning' : 'clean';
+
+                        return (
+                          <div className={`rounded-xl border p-4 space-y-3 ${auditStatus === 'clean' ? 'bg-green-500/5 border-green-500/20' : 'bg-yellow-500/5 border-yellow-500/20'}`}>
+                            <div className="flex items-center justify-between">
+                              <h4 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${auditStatus === 'clean' ? 'text-green-400' : 'text-yellow-400'}`}>
+                                <ShieldAlert size={14} /> Bill Audit Report
+                              </h4>
+                              <span className={`text-[9px] font-black px-2 py-1 rounded-full ${auditStatus === 'clean' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                {auditStatus === 'clean' ? '✅ ALL CLEAR' : `⚠️ ${issueCount} FLAG${issueCount > 1 ? 'S' : ''}`}
+                              </span>
+                            </div>
+
+                            {/* Bill Totals Breakdown */}
+                            <div className="grid grid-cols-4 gap-2 text-center">
+                              <div className="bg-slate-800/60 rounded-lg p-2">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase">Subtotal</p>
+                                <p className="text-sm font-black text-white">₹{billSubtotal.toFixed(0)}</p>
+                              </div>
+                              <div className="bg-slate-800/60 rounded-lg p-2">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase">GST</p>
+                                <p className="text-sm font-black text-blue-400">+₹{billGstTotal.toFixed(0)}</p>
+                              </div>
+                              <div className="bg-slate-800/60 rounded-lg p-2">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase">Grand Total</p>
+                                <p className="text-sm font-black text-green-400">₹{billGrandTotal.toFixed(0)}</p>
+                              </div>
+                              <div className="bg-slate-800/60 rounded-lg p-2">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase">Free Goods</p>
+                                <p className="text-sm font-black text-purple-400">₹{freeGoodsValue.toFixed(0)}</p>
+                              </div>
+                            </div>
+
+                            {/* Flags */}
+                            <div className="space-y-1.5">
+                              {/* Rate Mismatch */}
+                              {highDiffItems.length > 0 && (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
+                                  <p className="text-[10px] font-black text-red-400 uppercase mb-1">❌ Rate Mismatch ({highDiffItems.length} items — &gt;10% difference vs last purchase)</p>
+                                  {highDiffItems.map((item, i) => (
+                                    <p key={i} className="text-[9px] text-red-300 ml-3">
+                                      • {item.product_name}: Old ₹{item.oldRate} → New ₹{item.rate}
+                                      <span className={`font-black ml-1 ${item.diff > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                        ({item.diff > 0 ? '↑' : '↓'}{item.pctDiff?.toFixed(0)}%)
+                                      </span>
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Duplicates */}
+                              {duplicates.length > 0 && (
+                                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2.5">
+                                  <p className="text-[10px] font-black text-yellow-400 uppercase mb-1">⚠️ Duplicate Products ({duplicates.length} items appear multiple times)</p>
+                                  {duplicates.map(([name, count], i) => (
+                                    <p key={i} className="text-[9px] text-yellow-300 ml-3">• {name} — appears {count}× in bill</p>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* New Products */}
+                              {newItems.length > 0 && (
+                                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2.5">
+                                  <p className="text-[10px] font-black text-blue-400 uppercase">ℹ️ {newItems.length} New Product{newItems.length > 1 ? 's' : ''} (not in current inventory)</p>
+                                </div>
+                              )}
+
+                              {/* All Good */}
+                              {highDiffItems.length === 0 && duplicates.length === 0 && (
+                                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2.5">
+                                  <p className="text-[10px] font-black text-green-400 uppercase">✅ No rate mismatches • No duplicates • Bill looks clean!</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* Preview Table */}
                       <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-72 overflow-y-auto">
                         <table className="w-full text-[10px]">
@@ -1427,18 +1546,31 @@ export default function InventoryPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {importPreview.map((row, i) => (
-                              <tr key={i} className="border-t border-slate-800 hover:bg-slate-800/30">
-                                <td className="px-3 py-2 font-bold text-white max-w-[180px] truncate">{row.product_name}</td>
+                            {importPreview.map((row, i) => {
+                              const existing = products.find(p => p.name === row.product_name && p.is_active);
+                              const rateDiff = existing ? Math.abs(row.rate - existing.buying_price) / (existing.buying_price || 1) * 100 : 0;
+                              const isHighDiff = existing && rateDiff > 10;
+                              const isNew = !existing;
+                              return (
+                              <tr key={i} className={`border-t border-slate-800 hover:bg-slate-800/30 ${isHighDiff ? 'bg-red-500/10' : ''}`}>
+                                <td className="px-3 py-2 font-bold text-white max-w-[180px] truncate">
+                                  {row.product_name}
+                                  {isNew && <span className="ml-1 text-[8px] bg-blue-500/20 text-blue-400 font-black px-1 rounded">NEW</span>}
+                                  {isHighDiff && <span className="ml-1 text-[8px] bg-red-500/20 text-red-400 font-black px-1 rounded">⚠ RATE</span>}
+                                </td>
                                 <td className="px-3 py-2 text-center text-slate-400">{row.qty}</td>
                                 <td className="px-3 py-2 text-center text-green-400 font-bold">+{row.qty_free}</td>
                                 <td className="px-3 py-2 text-center font-black text-green-300">{row.total_stock}</td>
                                 <td className="px-3 py-2 text-slate-400 font-mono">{row.batch_no || '-'}</td>
                                 <td className="px-3 py-2 text-orange-400">{row.expiry_raw || '-'}</td>
                                 <td className="px-3 py-2 text-right text-white">₹{row.mrp}</td>
-                                <td className="px-3 py-2 text-right text-blue-400">₹{row.effective_cost}</td>
+                                <td className={`px-3 py-2 text-right font-bold ${isHighDiff ? 'text-red-400' : 'text-blue-400'}`}>
+                                  ₹{row.effective_cost}
+                                  {isHighDiff && <div className="text-[8px] text-red-300">was ₹{existing!.buying_price}</div>}
+                                </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
