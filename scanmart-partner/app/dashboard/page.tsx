@@ -118,21 +118,33 @@ export default function DashboardHome() {
         ownerStoreIds = (ownedStores || []).map((s: any) => s.id);
       }
 
-      // Step 3: Fetch all active staff
+      // Step 3: Fetch ONLY staff belonging to current owner's stores (security fix)
+      // ⚠️ FIX: Previously fetched ALL staff from ALL accounts — allowed cross-account PIN unlock
+      if (ownerStoreIds.length === 0) {
+        // New account with no stores yet — no staff to match
+        setPinError("❌ No stores found for this account. Please set up a store first.");
+        setLoading(false);
+        return;
+      }
+
       const { data: staffList, error } = await supabase
-        .from("staff").select("*").eq("is_active", true);
+        .from("staff")
+        .select("*")
+        .eq("is_active", true)
+        .in("store_id", ownerStoreIds); // ✅ Only THIS owner's staff
       if (error) throw error;
 
       // Step 4: PIN match + access scope
-      // Admin → any of owner's stores (or null store_id = owner setup)
+      // Admin → must belong to one of owner's stores
       // Manager/Staff → must match activeStoreId exactly
       let matchedStaff: any = null;
       for (const member of (staffList || [])) {
         if (!member.pin_code) continue;
         if (!(await verifyPin(pin, member.pin_code))) continue;
 
+        // ✅ FIX: isOwnerAdmin now requires store_id to be in ownerStoreIds (no null bypass)
         const isOwnerAdmin = member.role === 'admin' &&
-          (ownerStoreIds.length === 0 || !member.store_id || ownerStoreIds.includes(member.store_id));
+          ownerStoreIds.includes(member.store_id);
         const isStoreStaff = !!(activeStoreId && member.store_id && member.store_id === activeStoreId);
 
         if (isOwnerAdmin || isStoreStaff) {
