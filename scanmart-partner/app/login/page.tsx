@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { hashPin } from "@/lib/pin"; // ✅ Fix B: PIN hashing
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Mail, Loader2, Zap, ArrowRight, Store, KeyRound } from "lucide-react";
 
@@ -86,24 +87,48 @@ export default function LoginPage() {
 
         if (authError) throw authError;
 
-        // 3. Create Staff Profile linked to Owner ID — no data leak
+        // 3. Create Store + Staff Profile (Fix B: hash PIN, Fix C: create store)
         if (authData.user) {
+          // Fix B: Hash PIN before storing — never save plain text
+          const hashedPin = await hashPin(pin);
+
+          // Fix C: Create a default store for the new user
+          const { data: storeData, error: storeError } = await supabase
+            .from('stores')
+            .insert([{
+              owner_id: authData.user.id,
+              name: shopName || 'My Store',
+              is_main_store: true,
+            }])
+            .select('id')
+            .single();
+
+          if (storeError) {
+            console.error("Store DB Error:", storeError);
+            // Non-fatal — store can be created later in onboarding
+          }
+
+          // Create Staff Profile linked to store
           const { error: staffError } = await supabase
             .from('staff')
-            .insert([
-              {
-                id: authData.user.id,
-                name: "Shop Owner",
-                role: "admin",
-                pin_code: pin,
-                is_active: true,
-                shop_id: authData.user.id,
-              }
-            ]);
+            .insert([{
+              id: authData.user.id,
+              name: "Shop Owner",
+              role: "admin",
+              pin_code: hashedPin,        // ✅ Fix B: Hashed PIN
+              is_active: true,
+              shop_id: authData.user.id,
+              store_id: storeData?.id ?? null, // ✅ Fix C: Linked to store
+            }]);
 
           if (staffError) {
             console.error("Staff DB Error:", staffError);
-            throw new Error("Account created but failed to setup Shop Database. Contact Support.");
+            throw new Error("Account created but failed to setup Staff profile. Contact Support.");
+          }
+
+          // Save store in localStorage for immediate dashboard access
+          if (storeData?.id && typeof window !== 'undefined') {
+            localStorage.setItem('active_store_id', storeData.id);
           }
         }
 

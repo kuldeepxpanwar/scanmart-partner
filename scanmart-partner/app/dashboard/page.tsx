@@ -116,38 +116,58 @@ export default function DashboardHome() {
         const { data: ownedStores } = await supabase
           .from("stores").select("id").eq("owner_id", authUser.id);
         ownerStoreIds = (ownedStores || []).map((s: any) => s.id);
+        // Fallback: localStorage active_store_id (set during store selection)
+        if (ownerStoreIds.length === 0 && activeStoreId) {
+          ownerStoreIds = [activeStoreId];
+        }
       }
 
-      // Step 3: Fetch ONLY staff belonging to current owner's stores (security fix)
-      // ⚠️ FIX: Previously fetched ALL staff from ALL accounts — allowed cross-account PIN unlock
-      if (ownerStoreIds.length === 0) {
-        // New account with no stores yet — no staff to match
-        setPinError("❌ No stores found for this account. Please set up a store first.");
-        setLoading(false);
-        return;
+      // Step 3: Fetch staff scoped to this owner only
+      // Primary: match by store_id (secure, fully linked accounts)
+      // Fallback: match by shop_id = auth.uid() (new accounts where store_id is still NULL)
+      let resolvedStaff: any[] = [];
+
+      if (ownerStoreIds.length > 0) {
+        const { data, error } = await supabase
+          .from("staff")
+          .select("*")
+          .eq("is_active", true)
+          .in("store_id", ownerStoreIds);
+        if (error) throw error;
+        resolvedStaff = data || [];
       }
 
-      const { data: staffList, error } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("is_active", true)
-        .in("store_id", ownerStoreIds); // ✅ Only THIS owner's staff
-      if (error) throw error;
+      // Fallback: shop_id = authUser.id — safe because shop_id defaults to auth.uid() on creation
+      // This handles newly created accounts where admin staff still has store_id = NULL
+      if (resolvedStaff.length === 0 && authUser) {
+        const { data: fallbackStaff } = await supabase
+          .from("staff")
+          .select("*")
+          .eq("is_active", true)
+          .eq("shop_id", authUser.id);
+        resolvedStaff = fallbackStaff || [];
+      }
+
+      const staffList = resolvedStaff;
 
       // Step 4: PIN match + access scope
       // Admin → must belong to one of owner's stores
       // Manager/Staff → must match activeStoreId exactly
+      // Account Owner → new user with no store yet (shop_id = auth.uid())
       let matchedStaff: any = null;
       for (const member of (staffList || [])) {
         if (!member.pin_code) continue;
         if (!(await verifyPin(pin, member.pin_code))) continue;
 
-        // ✅ FIX: isOwnerAdmin now requires store_id to be in ownerStoreIds (no null bypass)
         const isOwnerAdmin = member.role === 'admin' &&
           ownerStoreIds.includes(member.store_id);
         const isStoreStaff = !!(activeStoreId && member.store_id && member.store_id === activeStoreId);
+        // ✅ Fix A: New account owner — no store yet, but shop_id = auth.uid()
+        // Safe: fallback staff query already scoped to authUser.id
+        const isAccountOwner = member.role === 'admin' &&
+          member.shop_id === authUser?.id;
 
-        if (isOwnerAdmin || isStoreStaff) {
+        if (isOwnerAdmin || isStoreStaff || isAccountOwner) {
           matchedStaff = member;
           break;
         }
