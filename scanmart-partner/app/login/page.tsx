@@ -87,9 +87,17 @@ export default function LoginPage() {
 
         if (authError) throw authError;
 
-        // 3. Create Store + Staff Profile (Fix B: hash PIN, Fix C: create store)
-        if (authData.user) {
-          // Fix B: Hash PIN before storing — never save plain text
+        // ✅ Step 3a: Check email confirmation FIRST
+        // If Supabase requires email confirmation, session is null → auth.uid() = null → RLS blocks DB ops
+        if (authData.user && !authData.session) {
+          setSuccessMsg("📬 Check your email! We've sent a verification link. Please verify before logging in.");
+          setLoading(false);
+          return;
+        }
+
+        // ✅ Step 3b: Session exists — safe to do DB operations
+        if (authData.user && authData.session) {
+          // Fix B: Hash PIN before storing
           const hashedPin = await hashPin(pin);
 
           // Fix C: Create a default store for the new user
@@ -98,14 +106,14 @@ export default function LoginPage() {
             .insert([{
               owner_id: authData.user.id,
               name: shopName || 'My Store',
-              is_main_store: true,
+              // Note: is_main_store removed (column may not exist)
             }])
             .select('id')
             .single();
 
           if (storeError) {
-            console.error("Store DB Error:", storeError);
-            // Non-fatal — store can be created later in onboarding
+            console.error("Store DB Error:", storeError.message, storeError.details);
+            // Non-fatal — staff will still be created with store_id = null
           }
 
           // Create Staff Profile linked to store
@@ -115,14 +123,14 @@ export default function LoginPage() {
               id: authData.user.id,
               name: "Shop Owner",
               role: "admin",
-              pin_code: hashedPin,        // ✅ Fix B: Hashed PIN
+              pin_code: hashedPin,
               is_active: true,
               shop_id: authData.user.id,
-              store_id: storeData?.id ?? null, // ✅ Fix C: Linked to store
+              store_id: storeData?.id ?? null,
             }]);
 
           if (staffError) {
-            console.error("Staff DB Error:", staffError);
+            console.error("Staff DB Error:", staffError.message, staffError.details, staffError.hint);
             throw new Error("Account created but failed to setup Staff profile. Contact Support.");
           }
 
@@ -130,14 +138,6 @@ export default function LoginPage() {
           if (storeData?.id && typeof window !== 'undefined') {
             localStorage.setItem('active_store_id', storeData.id);
           }
-        }
-
-        // 3. Check if email confirmation is required
-        if (authData.user && !authData.user.email_confirmed_at) {
-          // Supabase email confirmation is enabled — show verify email screen
-          setSuccessMsg("📬 Check your email! We've sent a verification link. Please verify before logging in.");
-          setLoading(false);
-          return;
         }
 
         setSuccessMsg("🎉 Shop Registered Successfully! Logging you in...");
