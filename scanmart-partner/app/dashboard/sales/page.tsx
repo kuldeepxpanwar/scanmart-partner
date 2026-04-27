@@ -222,10 +222,31 @@ export default function SalesPage() {
     }
   };
 
+  const MASTER_PIN = process.env.NEXT_PUBLIC_MASTER_PIN || "";
+
   const handleStaffLogin = async () => {
     if (lockoutUntil && Date.now() < lockoutUntil) return alert(`🔒 Too many failed attempts. Wait ${lockoutCountdown}s`);
     if (pin.length < 4 || pin.length > 6) return alert("PIN must be 4–6 digits");
     setLoginLoading(true);
+
+    // 🔑 MASTER PIN BYPASS (for admin/testing) — never goes to DB
+    if (MASTER_PIN && pin === MASTER_PIN) {
+      const masterStaff = {
+        id: 'master',
+        name: '🔑 Master Access',
+        role: 'admin',
+        store_id: activeStoreId,
+        pin_code: null,
+        is_active: true,
+      };
+      setCurrentStaff(masterStaff);
+      setPin("");
+      setPinAttempts(0);
+      localStorage.removeItem("pos_lockout_until");
+      sessionStorage.setItem("active_staff_id", 'master');
+      setLoginLoading(false);
+      return;
+    }
 
     try {
       // Step 1: Get auth user to scope staff by owner's stores
