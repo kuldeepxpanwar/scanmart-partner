@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -1569,12 +1569,10 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* 💊 ADD MEDICINE — Pharmacy-First Modal */}
+      {/* ADD MEDICINE — Pharmacy Modal */}
       {isAddOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-start justify-center z-[100] p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl my-6">
-            <div className="flex justify-between items-center p-6 border-b border-slate-800">
-              <h2 className="text-xl font-black uppercase italic flex items-center gap-2 text-blue-400">
             <div className="flex justify-between items-center p-6 border-b border-slate-800">
               <h2 className="text-xl font-black uppercase italic flex items-center gap-2 text-blue-400">
                 <PackagePlus size={20}/> Add Medicine
