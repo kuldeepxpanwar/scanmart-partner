@@ -494,8 +494,8 @@ export default function SalesPage() {
             <div className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">ScanMart</div>
             <div className="text-slate-500 text-[10px] font-bold">POS Terminal</div>
             <div className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-              {isOnline ? '● ONLINE' : `● OFFLINE${offlineQueueCount > 0 ? ` · ${offlineQueueCount} queued` : ''}`}
-              {syncing && <span className="text-yellow-400 animate-pulse">⟳ syncing</span>}
+              {isOnline ? '● ONLINE' : `● OFFLINE${pendingCount > 0 ? ` · ${pendingCount} queued` : ''}`}
+              {isSyncing && <span className="text-yellow-400 animate-pulse">⟳ syncing</span>}
             </div>
           </div>
           <Lock size={28} className="text-blue-500 mx-auto mb-3 mt-4" />
