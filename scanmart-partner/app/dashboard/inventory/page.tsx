@@ -208,8 +208,15 @@ export default function InventoryPage() {
 
   // --- Filter/Sort States ---
   const [filterType, setFilterType] = useState<"all" | "top_selling" | "most_profitable" | "dead_stock" | "low_stock">("all");
-  const [deadStockSort, setDeadStockSort] = useState<"none" | "high_value" | "low_value">("none"); // 🔥 Dead stock sub-filter
+  const [deadStockSort, setDeadStockSort] = useState<"none" | "high_value" | "low_value">("none");
   const [currentPage, setCurrentPage] = useState(1);
+
+  // --- ⏰ EXPIRY TAB STATES ---
+  const [activeTab, setActiveTab] = useState<'stock' | 'expiry'>('stock');
+  const [expiryBatches, setExpiryBatches] = useState<any[]>([]);
+  const [expiryLoading, setExpiryLoading] = useState(false);
+  const [expiryFilter, setExpiryFilter] = useState<'expired' | '30' | '60' | '90' | 'all'>('30');
+  const [disposingId, setDisposingId] = useState<string | null>(null);
 
   // --- 🔄 INITIALIZATION ---
   useEffect(() => {
@@ -231,6 +238,7 @@ export default function InventoryPage() {
     if (activeStoreId) {
       fetchData();
       fetchStoresList();
+      fetchExpiryBatches(activeStoreId);
     }
   }, [activeStoreId, showArchived]);
 
@@ -296,6 +304,36 @@ export default function InventoryPage() {
     if (transData) setTransfers(transData as any);
 
     setLoading(false);
+  };
+
+  // --- ⏰ EXPIRY BATCHES FETCH ---
+  const fetchExpiryBatches = async (storeId: string) => {
+    setExpiryLoading(true);
+    const { data, error } = await supabase
+      .from("inventory_batches")
+      .select(`
+        id, batch_number, expiry_date, quantity, buying_price,
+        inventory:product_id ( id, name, price, gst_rate )
+      `)
+      .eq("store_id", storeId)
+      .gt("quantity", 0)
+      .order("expiry_date", { ascending: true });
+
+    if (!error && data) setExpiryBatches(data as any[]);
+    setExpiryLoading(false);
+  };
+
+  // Mark batch as disposed (qty → 0)
+  const handleMarkDisposed = async (batchId: string) => {
+    setDisposingId(batchId);
+    const { error } = await supabase
+      .from("inventory_batches")
+      .update({ quantity: 0 })
+      .eq("id", batchId);
+    if (!error) {
+      setExpiryBatches(prev => prev.filter(b => b.id !== batchId));
+    }
+    setDisposingId(null);
   };
 
   // --- 🔴 SOFT DELETE FUNCTION (Custom Dialog) ---
@@ -814,10 +852,17 @@ export default function InventoryPage() {
 
         <div className="lg:col-span-3 flex flex-wrap gap-2 items-center justify-end">
           <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800 flex gap-1">
-            <button onClick={() => setFilterType('all')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${filterType === 'all' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'}`}>All</button>
-            <button onClick={() => setFilterType('most_profitable')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'most_profitable' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-green-500'}`}><DollarSign size={12} /> Profitable</button>
-            <button onClick={() => { setFilterType('dead_stock'); setDeadStockSort('none'); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'dead_stock' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-red-500'}`}><AlertTriangle size={12} /> Dead Stock</button>
-            <button onClick={() => setFilterType('low_stock')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${filterType === 'low_stock' ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-orange-500'}`}><TrendingDown size={12} /> Low Stock</button>
+            <button onClick={() => { setActiveTab('stock'); setFilterType('all'); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${activeTab === 'stock' && filterType === 'all' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'}`}>All</button>
+            <button onClick={() => { setActiveTab('stock'); setFilterType('most_profitable'); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${activeTab === 'stock' && filterType === 'most_profitable' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-green-500'}`}><DollarSign size={12} /> Profitable</button>
+            <button onClick={() => { setActiveTab('stock'); setFilterType('dead_stock'); setDeadStockSort('none'); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${activeTab === 'stock' && filterType === 'dead_stock' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-red-500'}`}><AlertTriangle size={12} /> Dead Stock</button>
+            <button onClick={() => { setActiveTab('stock'); setFilterType('low_stock'); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${activeTab === 'stock' && filterType === 'low_stock' ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-orange-500'}`}><TrendingDown size={12} /> Low Stock</button>
+            <button onClick={() => setActiveTab('expiry')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${activeTab === 'expiry' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-red-500'}`}>
+              ⏰ Expiry Alert {expiryBatches.filter(b => {
+                const d = new Date(b.expiry_date); const now = new Date();
+                const days = Math.ceil((d.getTime() - now.getTime()) / 86400000);
+                return days <= 30;
+              }).length > 0 && <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1">{expiryBatches.filter(b => { const d = new Date(b.expiry_date); const now = new Date(); return Math.ceil((d.getTime() - now.getTime()) / 86400000) <= 30; }).length}</span>}
+            </button>
           </div>
 
           {/* 🔥 Dead Stock High/Low Value Sub-Filter */}
@@ -865,6 +910,129 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+
+      {/* ⏰ EXPIRY ALERT TAB CONTENT */}
+      {activeTab === 'expiry' && (() => {
+        const now = new Date();
+        const filtered = expiryBatches.filter(b => {
+          const expDate = new Date(b.expiry_date);
+          const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / 86400000);
+          if (expiryFilter === 'expired') return daysLeft < 0;
+          if (expiryFilter === '30') return daysLeft >= 0 && daysLeft <= 30;
+          if (expiryFilter === '60') return daysLeft >= 0 && daysLeft <= 60;
+          if (expiryFilter === '90') return daysLeft >= 0 && daysLeft <= 90;
+          return true; // 'all'
+        });
+
+        const totalValueAtRisk = filtered.reduce((sum, b) => {
+          const sellPrice = Number(b.inventory?.price || 0);
+          return sum + sellPrice * b.quantity;
+        }, 0);
+
+        const getChipColor = (days: number) => {
+          if (days < 0) return { row: 'bg-red-950/20 border-red-800/20', badge: 'bg-red-600', label: 'EXPIRED' };
+          if (days <= 30) return { row: 'bg-red-950/10 border-red-900/20', badge: 'bg-red-500', label: `${days}d left` };
+          if (days <= 60) return { row: 'bg-orange-950/10 border-orange-900/20', badge: 'bg-orange-500', label: `${days}d left` };
+          return { row: 'bg-yellow-950/10 border-yellow-900/20', badge: 'bg-yellow-500', label: `${days}d left` };
+        };
+
+        return (
+          <div className="mb-6">
+            {/* Summary + filter row */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1">
+                {(['expired', '30', '60', '90', 'all'] as const).map(f => (
+                  <button key={f} onClick={() => setExpiryFilter(f)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                      expiryFilter === f
+                        ? f === 'expired' ? 'bg-red-600 text-white'
+                        : f === '30' ? 'bg-red-500 text-white'
+                        : f === '60' ? 'bg-orange-500 text-white'
+                        : f === '90' ? 'bg-yellow-500 text-black'
+                        : 'bg-slate-700 text-white'
+                        : 'text-slate-500 hover:text-white'
+                    }`}>
+                    {f === 'expired' ? '🚨 Expired' : f === 'all' ? 'All Batches' : `≤${f} Days`}
+                  </button>
+                ))}
+              </div>
+              <div className="ml-auto flex items-center gap-4">
+                <div className="bg-red-900/20 border border-red-700/30 rounded-xl px-4 py-2">
+                  <p className="text-[9px] font-black uppercase text-red-400">Value at Risk</p>
+                  <p className="text-red-400 font-black text-lg">₹{totalValueAtRisk.toFixed(0)}</p>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2">
+                  <p className="text-[9px] font-black uppercase text-slate-500">Batches</p>
+                  <p className="text-white font-black text-lg">{filtered.length}</p>
+                </div>
+              </div>
+            </div>
+
+            {expiryLoading ? (
+              <div className="flex items-center justify-center py-16"><span className="text-slate-500 font-bold text-sm animate-pulse">Loading expiry data...</span></div>
+            ) : filtered.length === 0 ? (
+              <div className="bg-green-900/20 border border-green-700/30 rounded-2xl p-12 text-center">
+                <p className="text-green-400 text-4xl mb-3">✅</p>
+                <p className="text-green-400 font-black text-lg">No batches expiring in this range!</p>
+                <p className="text-slate-500 text-sm mt-1">All stock is fresh and within safe date.</p>
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-950 border-b border-slate-800">
+                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-500">Product</th>
+                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-500">Batch No.</th>
+                      <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Expiry Date</th>
+                      <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Status</th>
+                      <th className="text-right px-4 py-3 text-[10px] font-black uppercase text-slate-500">Qty</th>
+                      <th className="text-right px-4 py-3 text-[10px] font-black uppercase text-slate-500">Value at Risk</th>
+                      <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(b => {
+                      const expDate = new Date(b.expiry_date);
+                      const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / 86400000);
+                      const { row, badge, label } = getChipColor(daysLeft);
+                      const valueAtRisk = Number(b.inventory?.price || 0) * b.quantity;
+                      return (
+                        <tr key={b.id} className={`border-b border-slate-800/50 ${row}`}>
+                          <td className="px-4 py-3 font-bold text-white">{b.inventory?.name || 'Unknown'}</td>
+                          <td className="px-4 py-3 text-slate-400 font-mono text-xs">{b.batch_number || '-'}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="font-bold text-sm">{new Date(b.expiry_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`${badge} text-white text-[9px] font-black px-2 py-1 rounded-full uppercase`}>{label}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold">{b.quantity}</td>
+                          <td className="px-4 py-3 text-right font-black text-red-400">₹{valueAtRisk.toFixed(0)}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => showConfirm(
+                                'Mark as Disposed',
+                                `Dispose all ${b.quantity} units of Batch ${b.batch_number}? This will set quantity to 0.`,
+                                () => handleMarkDisposed(b.id),
+                                'Dispose',
+                                'bg-red-700 hover:bg-red-600'
+                              )}
+                              disabled={disposingId === b.id}
+                              className="bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                            >
+                              {disposingId === b.id ? '...' : 'Dispose'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 💰 TOTAL VALUE BANNER */}
       <div className={`bg-gradient-to-r p-4 rounded-2xl mb-6 flex justify-between items-center border ${showArchived ? 'from-red-900/40 to-slate-900 border-red-500/30' : 'from-blue-900/40 to-slate-900 border-blue-500/30'}`}>

@@ -15,7 +15,7 @@ import { useApp } from "@/lib/AppContext";
 
 // --- UTILS ---
 import { verifyPin } from "@/lib/pin";
-import { idbGetQueue, idbRemoveSale, idbQueueCount } from "@/lib/offlineDb";
+import { idbAddSale, idbGetQueue, idbRemoveSale, idbQueueCount } from "@/lib/offlineDb";
 
 export default function SalesPage() {
   const { t, theme } = useApp();
@@ -65,6 +65,11 @@ export default function SalesPage() {
   const [showHeldBills, setShowHeldBills] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // --- 📶 OFFLINE MODE STATES ---
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const generateInvoiceNumber = () => {
     const date = new Date();
     const y = date.getFullYear();
@@ -90,6 +95,24 @@ export default function SalesPage() {
     // Load print mode from Settings
     const savedPrintMode = localStorage.getItem("printMode") as 'thermal' | 'a4' | null;
     if (savedPrintMode) setPrintMode(savedPrintMode);
+
+    // 📶 Network detection
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncOfflineQueue(); // auto-sync when back online
+    };
+    const handleOffline = () => setIsOnline(false);
+    setIsOnline(navigator.onLine);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Check pending count on mount
+    idbQueueCount().then(setPendingCount).catch(() => {});
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -128,6 +151,16 @@ export default function SalesPage() {
 
   const fetchProducts = async () => {
     if (!activeStoreId) return;
+
+    if (!navigator.onLine) {
+      // 📴 Offline: load from IndexedDB product cache
+      try {
+        const cached = localStorage.getItem(`scanmart_products_${activeStoreId}`);
+        if (cached) setProducts(JSON.parse(cached));
+      } catch { /* ignore */ }
+      return;
+    }
+
     const { data, error } = await supabase
       .from("inventory")
       .select("*, mrp")
@@ -136,7 +169,44 @@ export default function SalesPage() {
       .eq('is_active', true);
 
     if (error) console.error("Error fetching products:", error);
-    if (data) setProducts(data);
+    if (data) {
+      setProducts(data);
+      // 💾 Cache products for offline use
+      try { localStorage.setItem(`scanmart_products_${activeStoreId}`, JSON.stringify(data)); } catch { /* storage full */ }
+    }
+  };
+
+  // ── Sync pending offline sales to Supabase ─────────────────
+  const syncOfflineQueue = async () => {
+    const queue = await idbGetQueue();
+    if (queue.length === 0) { setPendingCount(0); return; }
+
+    setIsSyncing(true);
+    let synced = 0;
+    for (const entry of queue) {
+      try {
+        // 1. Insert sale
+        const { data: saleData, error: saleErr } = await supabase
+          .from("sales").insert([entry.saleRecord]).select('id').single();
+        if (saleErr) continue;
+
+        // 2. Insert sale items
+        const items = entry.items.map((item: any) => ({ ...item, sale_id: saleData.id }));
+        await supabase.from("sale_items").insert(items);
+
+        // 3. Apply stock decrements
+        for (const upd of entry.stockUpdates) {
+          await supabase.rpc("decrement_stock", { p_product_id: upd.id, p_quantity: upd.qty });
+        }
+
+        await idbRemoveSale(entry.id);
+        synced++;
+      } catch { /* skip — retry next time */ }
+    }
+    const remaining = await idbQueueCount();
+    setPendingCount(remaining);
+    setIsSyncing(false);
+    if (synced > 0) fetchProducts(); // refresh stock
   };
 
   const fetchSettings = async () => {
@@ -238,97 +308,124 @@ export default function SalesPage() {
   const handleCheckout = async () => {
     if (cart.length === 0) return alert("❌ Cart Empty!");
     setCheckoutLoading(true);
+
+    const invoiceNumber = generateInvoiceNumber();
+    const offlineId = `offline_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    // ── Calculate profit + GST ─────────────────────────────────
+    let totalProfit = 0;
+    let totalGst = 0;
+    cart.forEach((item: any) => {
+      const sellPrice = Number(item.price || 0);
+      const qty = Number(item.quantity || 0);
+      const buyPrice = Number(item.buying_price || 0);
+      const gstPct = Number(item.gst_rate || 0);
+      if (sellPrice > 0 && qty > 0) {
+        if (gstPct > 0) {
+          const base = sellPrice / (1 + gstPct / 100);
+          totalGst += (sellPrice - base) * qty;
+          totalProfit += (base - buyPrice) * qty;
+        } else {
+          totalProfit += (sellPrice - buyPrice) * qty;
+        }
+      }
+    });
+
+    const salePayload: any = {
+      total_amount: Number(finalTotal.toFixed(2)),
+      customer_id: null, // set below if online
+      payment_method: paymentMethod,
+      split_cash: paymentMethod === "split" ? Number(splitCash.toFixed(2)) : null,
+      split_upi: paymentMethod === "split" ? Number(splitUpi.toFixed(2)) : null,
+      total_savings: Number(totalSavings.toFixed(2)) || 0,
+      total_profit: Number(totalProfit.toFixed(2)),
+      total_gst: Number(totalGst.toFixed(2)),
+      staff_id: currentStaff?.id,
+      store_id: activeStoreId,
+      created_at: new Date().toISOString(),
+    };
+
+    const stockUpdates = cart.map((item) => ({
+      id: item.id,
+      qty: item.quantity * getTabletsPerUnit(item.pack_size, item.strip_size, item.sell_unit),
+    }));
+
+    const saleItemsPayload = cart.map((item) => ({
+      product_id: item.id,
+      quantity: item.quantity,
+      price_at_sale: Number(item.price),
+    }));
+
+    // ─── 📴 OFFLINE MODE ────────────────────────────────────────
+    if (!navigator.onLine) {
+      try {
+        await idbAddSale({
+          id: offlineId,
+          saleRecord: salePayload,
+          items: saleItemsPayload,
+          stockUpdates,
+        });
+        const newCount = await idbQueueCount();
+        setPendingCount(newCount);
+
+        // Show receipt from local data
+        setLastSale({
+          id: offlineId,
+          invoiceNumber,
+          date: new Date().toLocaleDateString('en-IN'),
+          time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+          customer: { name: name || "Guest", phone: phone || "N/A" },
+          items: [...cart],
+          total: finalTotal,
+          totalSavings,
+          totalQty: cart.reduce((acc, item) => acc + item.quantity, 0),
+          paymentMethod,
+          splitCash: paymentMethod === "split" ? splitCash : undefined,
+          splitUpi: paymentMethod === "split" ? splitUpi : undefined,
+          staffName: currentStaff?.name,
+          isOffline: true, // flag for receipt to show offline badge
+        });
+        setShowReceipt(true); clearCart(); resetCustomer();
+        setSplitCash(0); setSplitUpi(0);
+      } catch (err: any) {
+        alert("❌ Offline save failed: " + err.message);
+      } finally {
+        setCheckoutLoading(false);
+      }
+      return;
+    }
+
+    // ─── 📶 ONLINE MODE ─────────────────────────────────────────
     try {
       let customerId = null;
       if (phone) {
-        // BUG 3 FIX: Pehle cached `totalSpent` add kar rahe the jo galat accumulate hota tha
-        // Ab pehle DB se current value fetch karo, phir usmein add karo
         const { data: existingCustomer } = await supabase
-          .from("customers")
-          .select("total_spent")
-          .eq("phone", phone)
-          .eq("store_id", activeStoreId)
-          .maybeSingle();
-
+          .from("customers").select("total_spent")
+          .eq("phone", phone).eq("store_id", activeStoreId).maybeSingle();
         const currentSpent = Number(existingCustomer?.total_spent || 0);
-
         const { data: customer } = await supabase.from("customers").upsert({
-          name: name || "Guest",
-          phone,
+          name: name || "Guest", phone,
           total_spent: currentSpent + finalTotal,
           store_id: activeStoreId
         }, { onConflict: 'phone' }).select().maybeSingle();
         customerId = customer?.id;
       }
 
-      let totalProfit = 0;
-      let totalGst = 0;
-
-      cart.forEach((item: any) => {
-        const sellPrice = Number(item.price || 0);
-        const qty = Number(item.quantity || 0);
-        const buyPrice = Number(item.buying_price || 0);
-        const gstPct = Number(item.gst_rate || 0);
-
-        if (sellPrice > 0 && qty > 0) {
-          if (gstPct > 0) {
-            const base = sellPrice / (1 + gstPct / 100);
-            const taxAmt = sellPrice - base;
-            totalGst += taxAmt * qty;
-            totalProfit += (base - buyPrice) * qty;
-          } else {
-            totalProfit += (sellPrice - buyPrice) * qty;
-          }
-        }
-      });
-
-      const invoiceNumber = generateInvoiceNumber();
-
-      // ✅ FIX: Schema confirms total_profit + total_gst exist — removed dead retry fallback
-      const salePayload: any = {
-        total_amount: Number(finalTotal.toFixed(2)),
-        customer_id: customerId,
-        payment_method: paymentMethod,
-        split_cash: paymentMethod === "split" ? Number(splitCash.toFixed(2)) : null,
-        split_upi: paymentMethod === "split" ? Number(splitUpi.toFixed(2)) : null,
-        total_savings: Number(totalSavings.toFixed(2)) || 0,
-        total_profit: Number(totalProfit.toFixed(2)),
-        total_gst: Number(totalGst.toFixed(2)),
-        staff_id: currentStaff?.id,
-        store_id: activeStoreId,
-        created_at: new Date().toISOString(),
-      };
+      salePayload.customer_id = customerId;
 
       const { data: saleData, error: saleError } = await supabase
-        .from("sales")
-        .insert([salePayload])
-        .select('id')
-        .single();
-
+        .from("sales").insert([salePayload]).select('id').single();
       if (saleError) throw saleError;
 
-      const saleItemsData = cart.map((item) => ({
-        sale_id: saleData.id,
-        product_id: item.id,
-        quantity: item.quantity,
-        price_at_sale: Number(item.price),
-      }));
+      const itemsWithSaleId = saleItemsPayload.map(item => ({ ...item, sale_id: saleData.id }));
+      const { error: itemsInsertError } = await supabase.from("sale_items").insert(itemsWithSaleId);
+      if (itemsInsertError) console.error("sale_items insert error:", itemsInsertError?.message);
 
-      const { error: itemsInsertError } = await supabase.from("sale_items").insert(saleItemsData);
-      if (itemsInsertError) console.error("sale_items insert error:", itemsInsertError?.message || itemsInsertError);
-
-      // ✅ FIX: Atomic stock decrement via RPC — deduct in tablets (smallest unit)
-      for (const item of cart) {
-        // 💊 Calculate tablets to deduct based on sell unit
-        const tabletsPerUnit = getTabletsPerUnit(item.pack_size, item.strip_size, item.sell_unit);
-        const totalTablets = item.quantity * tabletsPerUnit;
+      for (const upd of stockUpdates) {
         const { error: stockErr } = await supabase.rpc("decrement_stock", {
-          p_product_id: item.id,
-          p_quantity: totalTablets,
+          p_product_id: upd.id, p_quantity: upd.qty,
         });
-        if (stockErr) {
-          console.error(`[Checkout] Stock decrement failed for ${item.name}:`, stockErr.message);
-        }
+        if (stockErr) console.error(`[Checkout] Stock decrement failed:`, stockErr.message);
       }
 
       setLastSale({
@@ -344,7 +441,7 @@ export default function SalesPage() {
         paymentMethod,
         splitCash: paymentMethod === "split" ? splitCash : undefined,
         splitUpi: paymentMethod === "split" ? splitUpi : undefined,
-        staffName: currentStaff?.name
+        staffName: currentStaff?.name,
       });
       setShowReceipt(true); clearCart(); resetCustomer();
       setSplitCash(0); setSplitUpi(0); fetchProducts();
@@ -386,50 +483,7 @@ export default function SalesPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [products, currentStaff, addToCart]);
 
-  const [isOnline, setIsOnline] = useState(true);
-  const [offlineQueueCount, setOfflineQueueCount] = useState(0);
-  const [syncing, setSyncing] = useState(false);
   const [numpadTarget, setNumpadTarget] = useState<'mobile' | 'discount' | null>(null);
-
-  useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); syncOfflineQueue(); };
-    const handleOffline = () => setIsOnline(false);
-    if (typeof window !== 'undefined') {
-      setIsOnline(navigator.onLine);
-      idbQueueCount().then(setOfflineQueueCount).catch(() => { });
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
-    }
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  const syncOfflineQueue = async () => {
-    const queue = await idbGetQueue().catch(() => []);
-    if (queue.length === 0) return;
-    setSyncing(true);
-    let synced = 0;
-    for (const sale of queue) {
-      try {
-        const { data: saleData, error } = await supabase.from('sales').insert([sale.saleRecord]).select('id').single();
-        if (!error && saleData) {
-          const items = sale.items.map((i: any) => ({ ...i, sale_id: saleData.id }));
-          await supabase.from('sale_items').insert(items);
-          for (const item of sale.stockUpdates) {
-            await supabase.from('inventory').update({ stock: item.newStock, last_sold_at: new Date().toISOString() }).eq('id', item.id);
-          }
-          await idbRemoveSale(sale.id);
-          synced++;
-        }
-      } catch (_) { }
-    }
-    const remaining = await idbQueueCount().catch(() => 0);
-    setOfflineQueueCount(remaining);
-    setSyncing(false);
-    if (synced > 0) alert(`✅ Synced ${synced} offline bill(s) to cloud!`);
-  };
 
   if (!currentStaff) {
     return (
@@ -485,7 +539,7 @@ export default function SalesPage() {
           <AppSwitcher />
           <span className="text-red-200">{new Date().toLocaleDateString('en-IN')} {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
           <span className={`font-black px-2 py-0.5 rounded text-[10px] ${isOnline ? 'bg-green-600 text-white' : 'bg-yellow-400 text-black'}`}>
-            {syncing ? '↻ Syncing...' : isOnline ? t('online') : `${t('offline')}${offlineQueueCount > 0 ? ` (${offlineQueueCount} queued)` : ''}`}
+            {isSyncing ? '↻ Syncing...' : isOnline ? t('online') : `${t('offline')}${pendingCount > 0 ? ` (${pendingCount} queued)` : ''}`}
           </span>
           <button onClick={handleLogout} className="bg-red-800 hover:bg-red-900 px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
             <LogOut size={10} /> {t('exit')}
