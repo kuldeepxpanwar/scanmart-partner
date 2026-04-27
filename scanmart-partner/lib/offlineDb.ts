@@ -26,7 +26,7 @@ export async function idbAddSale(sale: {
     id: string;
     saleRecord: Record<string, unknown>;
     items: Record<string, unknown>[];
-    stockUpdates: { id: string; newStock: number }[];
+    stockUpdates: { id: string; qty: number }[];
 }): Promise<void> {
     const db = await openDb();
     return new Promise((resolve, reject) => {
