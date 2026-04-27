@@ -501,6 +501,7 @@ export default function InventoryPage() {
         barcode: editItem.barcode || null,
         image: editItem.image || null,
         supplier_id: editItem.supplier_id || null,
+        hsn_code: editItem.hsn_code || null,  // 🔑 HSN Code save
         // 💊 Multi-unit fields
         pack_size: Number(editItem.pack_size) || 1,
         strip_size: Number(editItem.strip_size) || 1,
@@ -580,6 +581,21 @@ export default function InventoryPage() {
     return clean;
   };
 
+  // Auto-detect category from product name (e.g. "LENACEF TAB 10" → Tablet)
+  const autoCategory = (name: string, fallback: string): string => {
+    if (fallback && fallback.trim()) return fallback.trim();
+    const n = name.toUpperCase();
+    if (n.includes('TAB') || n.includes('TABLET')) return 'Tablet';
+    if (n.includes('CAP') || n.includes('CAPSULE')) return 'Capsule';
+    if (n.includes('SYP') || n.includes('SYRUP')) return 'Syrup';
+    if (n.includes('INJ') || n.includes('INJECTION') || n.includes('VIAL')) return 'Injection';
+    if (n.includes('CREAM') || n.includes('GEL') || n.includes('OINT')) return 'Cream';
+    if (n.includes('DROP') || n.includes('EYE') || n.includes('EAR')) return 'Drops';
+    if (n.includes('SACHET') || n.includes('POUCH')) return 'Sachet';
+    if (n.includes('LOTION') || n.includes('SOLUTION')) return 'Cream';
+    return 'Pharmacy';
+  };
+
   const handlePharmacyFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeStoreId) return;
@@ -597,8 +613,13 @@ export default function InventoryPage() {
         const effectiveCost = totalStock > 0 ? Math.round((qty * rate / totalStock) * 100) / 100 : rate;
         const sgst = Number(cols[9]?.trim()) || 0;
         const cgst = Number(cols[10]?.trim()) || 0;
+        const productName = cols[0]?.trim() || '';
+        // NEW cols (backward compatible — blank = auto)
+        const categoryRaw = cols[12]?.trim() || '';
+        const sellingPriceRaw = Number(cols[13]?.trim()) || 0;
+        const invoiceNo = cols[14]?.trim() || '';
         return {
-          product_name: cols[0]?.trim() || '',
+          product_name: productName,
           hsn: cols[1]?.trim() || '3004',
           qty, qty_free: qtyFree, total_stock: totalStock,
           batch_no: cols[4]?.trim() || '',
@@ -609,6 +630,10 @@ export default function InventoryPage() {
           discount: Number(cols[8]?.trim()) || 0,
           gst_rate: sgst + cgst,
           supplier_name: cols[11]?.trim() || '',
+          // 🔆 NEW fields
+          category: autoCategory(productName, categoryRaw),
+          selling_price: sellingPriceRaw || 0,  // 0 = use MRP
+          invoice_no: invoiceNo,
         };
       }).filter(r => r.product_name && r.total_stock > 0);
       if (rows.length === 0) { toast.error('No valid rows found. Check CSV format.'); return; }
@@ -638,30 +663,49 @@ export default function InventoryPage() {
       }
       let newCount = 0, updateCount = 0;
       for (const row of importPreview) {
+        // Determine sell price: use CSV selling_price if set, else MRP
+        const sellPrice = (row.selling_price && row.selling_price > 0) ? row.selling_price : row.mrp;
+        const category = row.category || 'Pharmacy';
+
         const { data: existingProd } = await supabase.from('inventory').select('id, stock')
           .eq('name', row.product_name).eq('store_id', activeStoreId).eq('is_active', true).maybeSingle();
         let productId = '';
         if (existingProd) {
           await supabase.from('inventory').update({
             stock: existingProd.stock + row.total_stock,
-            buying_price: row.effective_cost, mrp: row.mrp, price: row.mrp,
+            buying_price: row.effective_cost,
+            mrp: row.mrp,
+            price: sellPrice,
+            category,
+            ...(row.hsn ? { hsn_code: row.hsn } : {}),
             ...(supplierId ? { supplier_id: supplierId } : {}),
           }).eq('id', existingProd.id);
           productId = existingProd.id; updateCount++;
         } else {
           const { data: np } = await supabase.from('inventory').insert({
-            name: row.product_name, stock: row.total_stock,
-            mrp: row.mrp, price: row.mrp, buying_price: row.effective_cost,
-            gst_rate: row.gst_rate || 5, category: 'Pharmacy',
-            store_id: activeStoreId, supplier_id: supplierId, is_active: true, last_sold_at: null,
+            name: row.product_name,
+            stock: row.total_stock,
+            mrp: row.mrp,
+            price: sellPrice,
+            buying_price: row.effective_cost,
+            gst_rate: row.gst_rate || 5,
+            category,
+            hsn_code: row.hsn || '3004',
+            store_id: activeStoreId,
+            supplier_id: supplierId,
+            is_active: true,
+            last_sold_at: null,
           }).select('id').single();
           productId = np?.id || ''; newCount++;
         }
         if (productId && row.batch_no && row.expiry_date) {
           await supabase.from('inventory_batches').insert({
-            product_id: productId, store_id: activeStoreId,
-            batch_number: row.batch_no, expiry_date: row.expiry_date,
-            quantity: row.total_stock, buying_price: row.effective_cost,
+            product_id: productId,
+            store_id: activeStoreId,
+            batch_number: row.batch_no,
+            expiry_date: row.expiry_date,
+            quantity: row.total_stock,
+            buying_price: row.effective_cost,
           });
         }
       }
@@ -1960,6 +2004,22 @@ export default function InventoryPage() {
               <div className="relative">
                 <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                 <input type="text" placeholder="Barcode" className="w-full bg-slate-800 p-3 pl-10 rounded-xl border border-slate-700 outline-none font-mono" value={editItem.barcode || ""} onChange={(e) => setEditItem({ ...editItem, barcode: e.target.value })} />
+              </div>
+
+              {/* 🔑 HSN Code Field */}
+              <div>
+                <label className="text-[10px] font-bold uppercase text-purple-400 mb-1 flex items-center gap-1">
+                  <span>#</span> HSN Code
+                  {!editItem.hsn_code && <span className="text-amber-400 text-[9px] ml-1">(not set — required for GST invoice)</span>}
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 3004, 300494, 3004060"
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-purple-500/30 outline-none focus:border-purple-500 font-mono text-purple-300 placeholder-slate-600"
+                  value={editItem.hsn_code || ""}
+                  onChange={(e) => setEditItem({ ...editItem, hsn_code: e.target.value })}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
