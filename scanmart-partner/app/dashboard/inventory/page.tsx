@@ -212,11 +212,16 @@ export default function InventoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // --- ⏰ EXPIRY TAB STATES ---
-  const [activeTab, setActiveTab] = useState<'stock' | 'expiry'>('stock');
+  const [activeTab, setActiveTab] = useState<'stock' | 'expiry' | 'reorder'>('stock');
   const [expiryBatches, setExpiryBatches] = useState<any[]>([]);
   const [expiryLoading, setExpiryLoading] = useState(false);
   const [expiryFilter, setExpiryFilter] = useState<'expired' | '30' | '60' | '90' | 'all'>('30');
   const [disposingId, setDisposingId] = useState<string | null>(null);
+
+  // --- 🛒 SMART REORDER STATES ---
+  const [reorderList, setReorderList] = useState<any[]>([]);
+  const [reorderLoading, setReorderLoading] = useState(false);
+  const [reorderThreshold, setReorderThreshold] = useState(15); // days
 
   // --- 🔄 INITIALIZATION ---
   useEffect(() => {
@@ -239,6 +244,7 @@ export default function InventoryPage() {
       fetchData();
       fetchStoresList();
       fetchExpiryBatches(activeStoreId);
+      fetchReorderSuggestions(activeStoreId);
     }
   }, [activeStoreId, showArchived]);
 
@@ -334,6 +340,61 @@ export default function InventoryPage() {
       setExpiryBatches(prev => prev.filter(b => b.id !== batchId));
     }
     setDisposingId(null);
+  };
+
+  // --- 🛒 SMART REORDER FETCH ---
+  const fetchReorderSuggestions = async (storeId: string) => {
+    setReorderLoading(true);
+    try {
+      // 1. Fetch current inventory
+      const { data: invData } = await supabase
+        .from('inventory')
+        .select('id, name, stock, buying_price, price, category, barcode')
+        .eq('store_id', storeId)
+        .eq('is_active', true);
+
+      if (!invData || invData.length === 0) { setReorderList([]); return; }
+
+      // 2. Fetch last 30 days sale_items
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentSales } = await supabase
+        .from('sales')
+        .select('id')
+        .eq('store_id', storeId)
+        .gte('created_at', thirtyDaysAgo);
+
+      const saleIds = (recentSales || []).map((s: any) => s.id);
+      let soldQtyMap: Record<string, number> = {};
+
+      if (saleIds.length > 0) {
+        let allItems: any[] = [];
+        for (let i = 0; i < saleIds.length; i += 500) {
+          const { data: batch } = await supabase
+            .from('sale_items')
+            .select('product_id, quantity')
+            .in('sale_id', saleIds.slice(i, i + 500));
+          allItems = allItems.concat(batch || []);
+        }
+        allItems.forEach((item: any) => {
+          soldQtyMap[item.product_id] = (soldQtyMap[item.product_id] || 0) + Number(item.quantity || 0);
+        });
+      }
+
+      // 3. Calculate velocity & days remaining
+      const suggestions = invData
+        .map((product: any) => {
+          const soldLast30 = soldQtyMap[product.id] || 0;
+          const dailyVelocity = soldLast30 / 30;
+          const daysRemaining = dailyVelocity > 0 ? Math.floor(product.stock / dailyVelocity) : 999;
+          const suggestedQty = Math.max(0, Math.ceil(dailyVelocity * 30) - product.stock);
+          return { ...product, soldLast30, dailyVelocity, daysRemaining, suggestedQty };
+        })
+        .filter((p: any) => p.daysRemaining < reorderThreshold || (p.stock < 10 && p.soldLast30 > 0))
+        .sort((a: any, b: any) => a.daysRemaining - b.daysRemaining);
+
+      setReorderList(suggestions);
+    } catch (e) { console.error('Reorder fetch error:', e); }
+    setReorderLoading(false);
   };
 
   // --- 🔴 SOFT DELETE FUNCTION (Custom Dialog) ---
@@ -863,6 +924,9 @@ export default function InventoryPage() {
                 return days <= 30;
               }).length > 0 && <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1">{expiryBatches.filter(b => { const d = new Date(b.expiry_date); const now = new Date(); return Math.ceil((d.getTime() - now.getTime()) / 86400000) <= 30; }).length}</span>}
             </button>
+            <button onClick={() => setActiveTab('reorder')} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${activeTab === 'reorder' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-blue-500'}`}>
+              🛒 Reorder {reorderList.length > 0 && <span className="bg-blue-500 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1">{reorderList.length}</span>}
+            </button>
           </div>
 
           {/* 🔥 Dead Stock High/Low Value Sub-Filter */}
@@ -910,6 +974,126 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+
+      {/* 🛒 SMART REORDER TAB CONTENT */}
+      {activeTab === 'reorder' && (
+        <div className="mb-6">
+          {/* Header row */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div>
+              <h2 className="text-base font-black flex items-center gap-2">
+                🛒 Smart Reorder Suggestions
+              </h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Based on 30-day sales velocity</p>
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+                <span className="text-[9px] font-black uppercase text-slate-500">Alert if &lt;</span>
+                <input
+                  type="number" min={5} max={60}
+                  value={reorderThreshold}
+                  onChange={e => setReorderThreshold(Number(e.target.value))}
+                  className="w-12 bg-transparent text-white font-black text-center outline-none text-sm"
+                />
+                <span className="text-[9px] font-black uppercase text-slate-500">days</span>
+              </div>
+              <button
+                onClick={() => activeStoreId && fetchReorderSuggestions(activeStoreId)}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black uppercase px-3 py-2 rounded-xl transition-all"
+              >
+                🔄 Refresh
+              </button>
+            </div>
+          </div>
+
+          {reorderLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <span className="text-slate-500 font-bold text-sm animate-pulse">Analysing sales velocity...</span>
+            </div>
+          ) : reorderList.length === 0 ? (
+            <div className="bg-green-900/20 border border-green-700/30 rounded-2xl p-12 text-center">
+              <p className="text-green-400 text-4xl mb-3">✅</p>
+              <p className="text-green-400 font-black text-lg">All stock levels are healthy!</p>
+              <p className="text-slate-500 text-sm mt-1">No products need reorder in the next {reorderThreshold} days.</p>
+            </div>
+          ) : (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+              {/* WhatsApp Supplier Button */}
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-slate-500">{reorderList.length} products need reorder</span>
+                <button
+                  onClick={() => {
+                    let msg = `🛒 *Reorder Request*\n`;
+                    msg += `Date: ${new Date().toLocaleDateString('en-IN')}\n\n`;
+                    reorderList.forEach((p, i) => {
+                      msg += `${i + 1}. *${p.name}*\n`;
+                      msg += `   Current Stock: ${p.stock} | Suggest Order: *${p.suggestedQty} units*\n`;
+                    });
+                    msg += `\n_ScanMart Auto-Reorder_ 🚀`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                  }}
+                  className="bg-[#25D366] hover:bg-[#1ebe5d] text-white text-[9px] font-black uppercase px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
+                >
+                  📱 Send to Supplier
+                </button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-950 border-b border-slate-800">
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-500">Product</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Current Stock</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Sold / 30d</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Daily Velocity</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Days Left</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Suggest Order</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-black uppercase text-slate-500">Urgency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reorderList.map((p, i) => {
+                    const urgency = p.daysRemaining <= 0 ? 'OUT'
+                      : p.daysRemaining <= 5 ? 'CRITICAL'
+                      : p.daysRemaining <= 10 ? 'HIGH'
+                      : 'MEDIUM';
+                    const urgencyStyle = urgency === 'OUT' ? 'bg-red-600 text-white'
+                      : urgency === 'CRITICAL' ? 'bg-red-500 text-white'
+                      : urgency === 'HIGH' ? 'bg-orange-500 text-white'
+                      : 'bg-yellow-500 text-black';
+                    return (
+                      <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/20">
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-white">{p.name}</p>
+                          <p className="text-[9px] text-slate-500 font-bold uppercase">{p.category}</p>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-black text-lg ${p.stock <= 0 ? 'text-red-500' : p.stock < 10 ? 'text-orange-400' : 'text-white'}`}>
+                            {p.stock}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-slate-400 font-bold">{p.soldLast30}</td>
+                        <td className="px-4 py-3 text-center text-slate-400 font-bold">{p.dailyVelocity.toFixed(1)}/day</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-black ${p.daysRemaining <= 0 ? 'text-red-500' : p.daysRemaining <= 5 ? 'text-red-400' : p.daysRemaining <= 10 ? 'text-orange-400' : 'text-yellow-400'}`}>
+                            {p.daysRemaining <= 0 ? 'OUT' : `${p.daysRemaining}d`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="bg-blue-600/20 text-blue-400 font-black text-sm px-3 py-1 rounded-lg">
+                            {p.suggestedQty > 0 ? p.suggestedQty : '—'} units
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`${urgencyStyle} text-[9px] font-black px-2.5 py-1 rounded-full uppercase`}>{urgency}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ⏰ EXPIRY ALERT TAB CONTENT */}
       {activeTab === 'expiry' && (() => {

@@ -34,10 +34,11 @@ export default function AnalyticsPage() {
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [staffData, setStaffData] = useState<any[]>([]);
   const [deadStockData, setDeadStockData] = useState<any[]>([]);
+  const [productPnL, setProductPnL] = useState<any[]>([]);  // 💰 NEW: Per-product P&L
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("month"); // default: past 30 days
   const [exporting, setExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "products" | "staff" | "gst">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "products" | "staff" | "gst" | "pnl">("overview");
   const [isMounted, setIsMounted] = useState(false);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [hasProfit, setHasProfit] = useState(false);
@@ -102,18 +103,17 @@ export default function AnalyticsPage() {
         setHasProfit(true);
       }
 
-      // ── Sale items for top products ────────────────────────────
+      // ── Sale items for top products + P&L ──────────────────────
       const saleIds = salesData.map((s: any) => s.id);
-      let topProdsMap: Record<string, { name: string; qty: number; revenue: number }> = {};
+      let topProdsMap: Record<string, { name: string; qty: number; revenue: number; cost: number }> = {};
       if (saleIds.length > 0) {
-        // Fetch sale_items in batches of 500 to bypass Supabase IN clause limit
         let allSaleItems: any[] = [];
         const batchSize = 500;
         for (let i = 0; i < saleIds.length; i += batchSize) {
           const batch = saleIds.slice(i, i + batchSize);
           const { data: batchItems } = await supabase
             .from("sale_items")
-            .select("product_id, quantity, price_at_sale, inventory!fk_product(name, category)")
+            .select("product_id, quantity, price_at_sale, inventory!fk_product(name, category, buying_price)")
             .in("sale_id", batch);
           allSaleItems = allSaleItems.concat(batchItems || []);
         }
@@ -121,9 +121,13 @@ export default function AnalyticsPage() {
 
         (saleItems || []).forEach((item: any) => {
           const name = item.inventory?.name || "Unknown";
-          if (!topProdsMap[item.product_id]) topProdsMap[item.product_id] = { name, qty: 0, revenue: 0 };
-          topProdsMap[item.product_id].qty += Number(item.quantity || 0);
-          topProdsMap[item.product_id].revenue += Number(item.price_at_sale || 0) * Number(item.quantity || 0);
+          const buyingPrice = Number(item.inventory?.buying_price || 0);
+          const salePrice = Number(item.price_at_sale || 0);
+          const qty = Number(item.quantity || 0);
+          if (!topProdsMap[item.product_id]) topProdsMap[item.product_id] = { name, qty: 0, revenue: 0, cost: 0 };
+          topProdsMap[item.product_id].qty += qty;
+          topProdsMap[item.product_id].revenue += salePrice * qty;
+          topProdsMap[item.product_id].cost += buyingPrice * qty;
         });
 
         // ── Category breakdown ────────────────────────────────
@@ -133,6 +137,16 @@ export default function AnalyticsPage() {
           categoryMap[cat] = (categoryMap[cat] || 0) + Number(item.price_at_sale || 0) * Number(item.quantity || 0);
         });
         setCategoryData(Object.entries(categoryMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value));
+
+        // ── Per-product P&L (sorted by profit) ───────────────
+        const pnlList = Object.values(topProdsMap)
+          .map(p => ({
+            ...p,
+            profit: p.revenue - p.cost,
+            margin: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue * 100) : 0,
+          }))
+          .sort((a, b) => b.profit - a.profit);
+        setProductPnL(pnlList);
       }
 
       const sortedTop = Object.values(topProdsMap).sort((a, b) => b.qty - a.qty).slice(0, 8);
@@ -322,6 +336,7 @@ export default function AnalyticsPage() {
   const TABS = [
     { id: "overview", label: t('dashboard'), icon: <TrendingUp size={14} /> },
     { id: "products", label: t('inventory'), icon: <Package size={14} /> },
+    { id: "pnl", label: "P&L", icon: <IndianRupee size={14} /> },
     { id: "staff", label: "Staff", icon: <Users size={14} /> },
     { id: "gst", label: "GST", icon: <FileText size={14} /> },
   ] as const;
@@ -350,6 +365,34 @@ export default function AnalyticsPage() {
               <option value="all">All Time</option>
             </select>
           </div>
+
+          {/* 📲 WhatsApp Daily Summary Button */}
+          {filter === 'today' && (
+            <button
+              onClick={() => {
+                const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                let msg = `📊 *Daily Summary — ${date}*\n`;
+                msg += `💰 Revenue: ₹${stats.totalRevenue.toLocaleString()}\n`;
+                msg += `📦 Orders: ${stats.totalSales}\n`;
+                msg += `💵 Avg Order: ₹${avgOrderValue}\n`;
+                if (hasProfit) msg += `📈 Net Profit: ₹${stats.totalProfit.toLocaleString()} (${profitMargin}%)\n`;
+                if (hasProfit) msg += `🏦 GST Collected: ₹${stats.totalTax.toLocaleString()}\n`;
+                msg += `🛒 Customer Savings: ₹${stats.totalSavings.toLocaleString()}\n`;
+                if (stats.lowStockCount > 0) msg += `\n⚠️ Low Stock Alert: ${stats.lowStockCount} items need reorder!\n`;
+                if (topProducts.length > 0) {
+                  msg += `\n🏆 Top Sellers Today:\n`;
+                  topProducts.slice(0, 3).forEach((p, i) => {
+                    msg += `${i + 1}. ${p.name} — ${p.qty} units | ₹${Math.round(p.revenue)}\n`;
+                  });
+                }
+                msg += `\n_Powered by ScanMart_ 🚀`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95"
+            >
+              📱 WA Summary
+            </button>
+          )}
 
           {/* Export Dropdown */}
           <div className="relative group">
@@ -473,6 +516,95 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* ═══════════════ PER-PRODUCT P&L TAB ═══════════════ */}
+          {activeTab === "pnl" && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-black flex items-center gap-2">
+                  <IndianRupee size={16} className="text-green-400" /> Per-Product Profit & Loss
+                </h2>
+                <span className="text-[10px] text-slate-500 font-bold uppercase">{productPnL.length} products analysed</span>
+              </div>
+              {productPnL.length === 0 ? (
+                <div className="py-20 text-center text-slate-600 font-bold">No sales data in this period</div>
+              ) : (
+                <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-950 border-b border-slate-800">
+                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase text-slate-500">#</th>
+                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase text-slate-500">Product</th>
+                        <th className="text-right px-4 py-3 text-[10px] font-black uppercase text-slate-500">Units Sold</th>
+                        <th className="text-right px-4 py-3 text-[10px] font-black uppercase text-slate-500">Revenue</th>
+                        <th className="text-right px-4 py-3 text-[10px] font-black uppercase text-slate-500">Cost</th>
+                        <th className="text-right px-4 py-3 text-[10px] font-black uppercase text-slate-500">Profit</th>
+                        <th className="text-right px-5 py-3 text-[10px] font-black uppercase text-slate-500">Margin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productPnL.map((p, i) => {
+                        const isProfit = p.profit >= 0;
+                        const hasNoCost = p.cost === 0;
+                        return (
+                          <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                            <td className="px-5 py-3 text-slate-500 font-bold">{i + 1}</td>
+                            <td className="px-5 py-3 font-bold text-white max-w-[200px] truncate">{p.name}</td>
+                            <td className="px-4 py-3 text-right text-slate-300">{p.qty}</td>
+                            <td className="px-4 py-3 text-right font-bold text-blue-400">₹{Math.round(p.revenue).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right text-slate-400">
+                              {hasNoCost ? <span className="text-amber-500 text-[10px]">No buying price</span> : `₹${Math.round(p.cost).toLocaleString()}`}
+                            </td>
+                            <td className={`px-4 py-3 text-right font-black ${hasNoCost ? 'text-slate-600' : isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                              {hasNoCost ? '—' : `${isProfit ? '+' : ''}₹${Math.round(p.profit).toLocaleString()}`}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              {hasNoCost ? (
+                                <span className="text-[9px] text-amber-500 bg-amber-900/20 px-2 py-1 rounded-full">Set buying price</span>
+                              ) : (
+                                <span className={`text-[11px] font-black px-2.5 py-1 rounded-full ${
+                                  p.margin >= 30 ? 'bg-green-500/20 text-green-400' :
+                                  p.margin >= 15 ? 'bg-blue-500/20 text-blue-400' :
+                                  p.margin >= 0 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>{p.margin.toFixed(1)}%</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-slate-950 border-t-2 border-slate-700">
+                      <tr>
+                        <td colSpan={3} className="px-5 py-3 text-[10px] font-black uppercase text-slate-500">Totals</td>
+                        <td className="px-4 py-3 text-right font-black text-blue-400">
+                          ₹{Math.round(productPnL.reduce((s, p) => s + p.revenue, 0)).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-right font-black text-slate-400">
+                          ₹{Math.round(productPnL.reduce((s, p) => s + p.cost, 0)).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-right font-black text-green-400">
+                          ₹{Math.round(productPnL.reduce((s, p) => s + p.profit, 0)).toLocaleString()}
+                        </td>
+                        <td className="px-5 py-3 text-right font-black text-green-400">
+                          {(() => {
+                            const totalRev = productPnL.reduce((s, p) => s + p.revenue, 0);
+                            const totalProf = productPnL.reduce((s, p) => s + p.profit, 0);
+                            return totalRev > 0 ? `${((totalProf / totalRev) * 100).toFixed(1)}%` : '—';
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                  {productPnL.some(p => p.cost === 0) && (
+                    <div className="p-4 bg-amber-900/10 border-t border-amber-900/20">
+                      <p className="text-amber-400 text-xs font-bold">⚠️ Some products missing buying price — go to Inventory → Edit product to set buying price for accurate P&L</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ═══════════════ PRODUCTS TAB ═══════════════ */}
