@@ -44,8 +44,11 @@ export default function LoginPage() {
     setForgotError("");
     setForgotMsg("");
     try {
+      // ✅ FIX: Always redirect to production URL, not localhost
+      // On Vercel: NEXT_PUBLIC_SITE_URL is set. Locally: fallback to origin.
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
-        redirectTo: `${window.location.origin}/login`,
+        redirectTo: `${siteUrl}/auth/reset-password`,
       });
       if (error) throw error;
       setForgotMsg("✅ Reset link sent! Check your inbox (also check Spam folder).");
