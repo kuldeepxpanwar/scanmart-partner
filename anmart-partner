@@ -1,0 +1,5 @@
+[33m95b8193[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: signup flow - email check before DB ops, remove is_main_store
+[33m22f2e3e[m feat: pharmacy bill CSV import with batch tracking, free qty, supplier auto-save
+[33m3274ea8[m fix: security hardening - PIN hashing, store on signup, decrement_stock owner check
+[33mc956a79[m fix: new user onboarding - hash PIN, create store on signup, fix dashboard access
+[33m42fd58b[m fix: scope staff PIN lookup to owner stores only - security fix

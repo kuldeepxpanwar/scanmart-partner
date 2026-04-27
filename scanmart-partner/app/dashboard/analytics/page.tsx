@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useApp } from "@/lib/AppContext";
 
 // ─────────────────────────────────────────────────────────────
 //  NOTE: For Net Profit & GST to show correctly, run this SQL
@@ -22,6 +23,7 @@ import autoTable from "jspdf-autotable";
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
 export default function AnalyticsPage() {
+  const { t } = useApp();
   const [stats, setStats] = useState({
     totalRevenue: 0, totalSales: 0, lowStockCount: 0,
     totalProfit: 0, totalTax: 0, totalSavings: 0,
@@ -318,10 +320,10 @@ export default function AnalyticsPage() {
   if (!isMounted) return null;
 
   const TABS = [
-    { id: "overview", label: "Overview", icon: <TrendingUp size={14} /> },
-    { id: "products", label: "Products", icon: <Package size={14} /> },
+    { id: "overview", label: t('dashboard'), icon: <TrendingUp size={14} /> },
+    { id: "products", label: t('inventory'), icon: <Package size={14} /> },
     { id: "staff", label: "Staff", icon: <Users size={14} /> },
-    { id: "gst", label: "GST & Tax", icon: <FileText size={14} /> },
+    { id: "gst", label: "GST", icon: <FileText size={14} /> },
   ] as const;
 
   return (
@@ -331,7 +333,7 @@ export default function AnalyticsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-            <TrendingUp className="text-blue-500" size={30} /> Analytics
+            <TrendingUp className="text-blue-500" size={30} /> {t('analytics')}
           </h1>
           <p className="text-slate-500 text-xs font-bold mt-1 uppercase tracking-widest">Business Intelligence Dashboard</p>
         </div>
@@ -341,10 +343,10 @@ export default function AnalyticsPage() {
             <Calendar size={16} className="text-blue-500" />
             <select value={filter} onChange={e => setFilter(e.target.value)}
               className="bg-transparent outline-none text-sm font-bold cursor-pointer text-slate-300">
-              <option value="today">Today</option>
-              <option value="week">Past 7 Days</option>
-              <option value="month">Past 30 Days</option>
-              <option value="quarter">Past 90 Days</option>
+              <option value="today">{t('today')}</option>
+              <option value="week">{t('this_week')}</option>
+              <option value="month">{t('this_month')}</option>
+              <option value="quarter">90 Days</option>
               <option value="all">All Time</option>
             </select>
           </div>
@@ -409,24 +411,24 @@ export default function AnalyticsPage() {
             <>
               {/* KPI Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <StatCard title="Gross Revenue" val={`₹${stats.totalRevenue.toLocaleString()}`} sub={`${stats.totalSales} orders`} color="text-blue-400" icon={<IndianRupee size={18} />} bg="bg-blue-500/10" />
-                <StatCard title="Net Profit" val={hasProfit ? `₹${stats.totalProfit.toLocaleString()}` : "—"} sub={hasProfit ? `${profitMargin}% margin` : "SQL needed"} color="text-green-400" icon={<Percent size={18} />} bg="bg-green-500/10" dimmed={!hasProfit} />
-                <StatCard title="Avg Order Value" val={`₹${avgOrderValue}`} sub="per transaction" color="text-purple-400" icon={<ShoppingBag size={18} />} bg="bg-purple-500/10" />
-                <StatCard title="GST Collected" val={hasProfit ? `₹${stats.totalTax.toLocaleString()}` : "—"} sub={hasProfit ? "tax payable" : "SQL needed"} color="text-amber-400" icon={<Wallet size={18} />} bg="bg-amber-500/10" dimmed={!hasProfit} />
+                <StatCard title={t('revenue')} val={`₹${stats.totalRevenue.toLocaleString()}`} sub={`${stats.totalSales} orders`} color="text-blue-400" icon={<IndianRupee size={18} />} bg="bg-blue-500/10" />
+                <StatCard title={t('profit')} val={hasProfit ? `₹${stats.totalProfit.toLocaleString()}` : "—"} sub={hasProfit ? `${profitMargin}% margin` : "SQL needed"} color="text-green-400" icon={<Percent size={18} />} bg="bg-green-500/10" dimmed={!hasProfit} />
+                <StatCard title="Avg Order" val={`₹${avgOrderValue}`} sub="per transaction" color="text-purple-400" icon={<ShoppingBag size={18} />} bg="bg-purple-500/10" />
+                <StatCard title="GST" val={hasProfit ? `₹${stats.totalTax.toLocaleString()}` : "—"} sub={hasProfit ? "tax payable" : "SQL needed"} color="text-amber-400" icon={<Wallet size={18} />} bg="bg-amber-500/10" dimmed={!hasProfit} />
               </div>
 
               {/* Row 2: Stats */}
               <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-[2rem] text-center">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">Total Orders</p>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">{t('sales')}</p>
                   <p className="text-4xl font-black text-blue-500">{stats.totalSales}</p>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-[2rem] text-center">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">Customer Savings</p>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">{t('savings')}</p>
                   <p className="text-4xl font-black text-purple-400">₹{stats.totalSavings.toLocaleString()}</p>
                 </div>
                 <div className="bg-slate-900 border border-red-900/30 p-5 rounded-[2rem] text-center">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">Low Stock Items</p>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">{t('low_stock')}</p>
                   <p className="text-4xl font-black text-red-500">{stats.lowStockCount}</p>
                 </div>
               </div>

@@ -9,7 +9,7 @@ export default function BarcodeScanner({ onScan, onClose }: { onScan: (code: str
       "reader", 
       { 
         fps: 15, 
-        qrbox: { width: 250, height: 150 }, // Barcode के लिए आयताकार बॉक्स
+        qrbox: { width: 250, height: 150 }, 
         aspectRatio: 1.777778 // 16:9 mobile friendly ratio
       }, 
       /* verbose= */ false
@@ -17,11 +17,11 @@ export default function BarcodeScanner({ onScan, onClose }: { onScan: (code: str
 
     scanner.render(
       (decodedText) => {
-        onScan(decodedText); // सफल स्कैन पर डेटा वापस भेजें
-        scanner.clear(); // कैमरा बंद करें
+        onScan(decodedText); 
+        scanner.clear(); 
       },
       (error) => {
-        // यहाँ एरर लॉग्गिंग की ज़रूरत नहीं वरना कंसोल भर जाएगा
+       
       }
     );
 

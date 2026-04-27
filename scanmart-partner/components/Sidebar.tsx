@@ -8,10 +8,13 @@ import {
   Truck, LogOut, Zap, ShoppingCart, ScanBarcode, Shield,
   RefreshCcw, RotateCcw, FileText, Sparkles, ChevronRight, ChevronLeft, Menu
 } from "lucide-react";
+import { useApp } from "@/lib/AppContext";
+import AppSwitcher from "@/components/AppSwitcher";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useApp();
   const [userRole, setUserRole] = useState<string | null>(null);
 
   // Auto-collapse on billing page, expand on others
@@ -67,18 +70,18 @@ export default function Sidebar() {
   };
 
   const allNavItems = [
-    { label: "Overview", icon: <LayoutDashboard size={20} />, href: "/dashboard", roles: ["admin", "manager", "staff"] },
-    { label: "Billing (Sales)", icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
-    { label: "Returns & Refunds", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager", "staff"] },
-    { label: "Inventory", icon: <Package size={20} />, href: "/dashboard/inventory", roles: ["admin", "manager"] },
-    { label: "Suppliers", icon: <Truck size={20} />, href: "/dashboard/suppliers", roles: ["admin", "manager"] },
-    { label: "Analytics", icon: <BarChart3 size={20} />, href: "/dashboard/analytics", roles: ["admin", "manager"] },
-    { label: "Customers", icon: <Users size={20} />, href: "/dashboard/customers", roles: ["admin", "manager"] },
+    { label: t('dashboard'), icon: <LayoutDashboard size={20} />, href: "/dashboard", roles: ["admin", "manager", "staff"] },
+    { label: t('pos_terminal'), icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
+    { label: "Returns", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager", "staff"] },
+    { label: t('inventory'), icon: <Package size={20} />, href: "/dashboard/inventory", roles: ["admin", "manager"] },
+    { label: t('supplier'), icon: <Truck size={20} />, href: "/dashboard/suppliers", roles: ["admin", "manager"] },
+    { label: t('analytics'), icon: <BarChart3 size={20} />, href: "/dashboard/analytics", roles: ["admin", "manager"] },
+    { label: t('customer'), icon: <Users size={20} />, href: "/dashboard/customers", roles: ["admin", "manager"] },
     { label: "Team Access", icon: <Shield size={20} />, href: "/dashboard/staff", roles: ["admin"] },
     { label: "Sticker Studio", icon: <ScanBarcode size={20} />, href: "/dashboard/stickers", roles: ["admin", "manager", "staff"] },
     { label: "Z-Report", icon: <FileText size={20} />, href: "/dashboard/zreport", roles: ["admin", "manager"] },
     { label: "Onboarding", icon: <Sparkles size={20} />, href: "/dashboard/onboarding", roles: ["admin"] },
-    { label: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", roles: ["admin"] },
+    { label: t('settings'), icon: <Settings size={20} />, href: "/dashboard/settings", roles: ["admin"] },
   ];
 
   const filteredNavItems = allNavItems.filter(item =>
@@ -96,7 +99,7 @@ export default function Sidebar() {
         </div>
         {!collapsed && (
           <span className="text-lg font-bold text-white tracking-tight whitespace-nowrap overflow-hidden">
-            ScanMart<span className="text-blue-500">.Dash</span>
+            {t('app_name')}<span className="text-blue-500">.Dash</span>
           </span>
         )}
       </div>
@@ -154,6 +157,13 @@ export default function Sidebar() {
           );
         })}
       </nav>
+
+      {/* --- Theme/Lang Switcher --- */}
+      {!collapsed && (
+        <div className="px-3 py-2 border-t border-slate-800">
+          <AppSwitcher />
+        </div>
+      )}
 
       {/* --- Footer --- */}
       <div className={`border-t border-slate-800 space-y-1 p-2 flex-shrink-0`}>

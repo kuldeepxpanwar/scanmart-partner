@@ -32,6 +32,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Paginator from "@/components/Paginator";
 import DateRangePicker from "@/components/ui/DateRangePicker";
+import { useApp } from "@/lib/AppContext";
 
 const INV_PAGE_SIZE = 20;
 
@@ -120,6 +121,7 @@ const GST_SLABS = [
 ];
 
 export default function InventoryPage() {
+  const { t } = useApp();
   const [products, setProducts] = useState<InventoryItem[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierType[]>([]); // 🔥 Suppliers State
@@ -771,7 +773,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-3xl font-black italic uppercase flex items-center gap-2">
             <Store className="text-blue-500" />
-            {showArchived ? <span className="text-red-500">ARCHIVED ITEMS</span> : <>STOCK<span className="text-blue-600">MANAGER</span></>}
+            {showArchived ? <span className="text-red-500">{t('archive')}</span> : <>{t('inventory')}<span className="text-blue-600">MANAGER</span></>}
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
             Viewing Store ID: <span className="text-blue-400">{activeStoreId ? activeStoreId.slice(0, 8) + '...' : 'Loading...'}</span>
@@ -792,10 +794,10 @@ export default function InventoryPage() {
                 <ArrowRightLeft size={16} /> Transfers
               </button>
               <button onClick={() => setIsImportOpen(true)} className="bg-slate-800 px-4 py-3 rounded-xl flex items-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all text-xs font-bold uppercase text-slate-300 hover:text-white">
-                <Upload size={16} /> Import
+                <Upload size={16} /> {t('import_csv')}
               </button>
               <button onClick={() => setIsAddOpen(true)} className="bg-blue-600 px-4 py-3 rounded-xl flex items-center gap-2 hover:bg-blue-700 transition-all text-xs font-bold uppercase shadow-lg shadow-blue-900/20 text-white">
-                <Plus size={16} /> Add Product
+                <Plus size={16} /> {t('add_product')}
               </button>
             </>
           )}
@@ -883,10 +885,10 @@ export default function InventoryPage() {
           <table className="w-full text-left">
             <thead className="bg-slate-950 text-slate-400 text-[10px] font-bold uppercase tracking-widest border-b border-slate-800">
               <tr>
-                <th className="p-5">Product Info</th>
-                <th className="p-5">Category</th>
-                <th className="p-5">Pricing (Margin)</th>
-                <th className="p-5">Stock Health</th>
+                <th className="p-5">{t('product_name')}</th>
+                <th className="p-5">{t('category')}</th>
+                <th className="p-5">{t('price')} (Margin)</th>
+                <th className="p-5">{t('stock')}</th>
                 <th className="p-5 text-right">Actions</th>
               </tr>
             </thead>

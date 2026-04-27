@@ -10,12 +10,15 @@ import POSCartTable from "@/components/pos/POSCartTable";
 import POSReceipt from "@/components/pos/POSReceipt";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ForgotPinModal from "@/components/ForgotPinModal";
+import AppSwitcher from "@/components/AppSwitcher";
+import { useApp } from "@/lib/AppContext";
 
 // --- UTILS ---
 import { verifyPin } from "@/lib/pin";
 import { idbGetQueue, idbRemoveSale, idbQueueCount } from "@/lib/offlineDb";
 
 export default function SalesPage() {
+  const { t, theme } = useApp();
   // --- 🔐 STAFF & STORE STATES ---
   const [currentStaff, setCurrentStaff] = useState<any>(null);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
@@ -443,7 +446,7 @@ export default function SalesPage() {
           </div>
           <Lock size={28} className="text-blue-500 mx-auto mb-3 mt-4" />
           <h2 className="text-xl font-black uppercase italic mb-1">POS Access</h2>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-5">Enter Staff PIN (Admin: 6 digits)</p>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-5">{t('enter_pin')} (Admin: 6 digits)</p>
           <div className="flex justify-center gap-2 mb-4">
             {[0, 1, 2, 3, 4, 5].map(i => (
               <div key={i} className={`w-2.5 h-2.5 rounded-full transition-all ${pin.length > i ? 'bg-blue-500 scale-125 shadow shadow-blue-500/50' : 'bg-slate-700'}`} />
@@ -458,11 +461,14 @@ export default function SalesPage() {
             placeholder="••••"
           />
           <button onClick={handleStaffLogin} className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all active:scale-95">
-            {loginLoading ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'UNLOCK TERMINAL'}
+            {loginLoading ? <Loader2 className="animate-spin mx-auto" size={18} /> : t('unlock_terminal')}
           </button>
           <button onClick={() => setShowForgotPin(true)} className="mt-4 text-slate-500 hover:text-blue-400 text-xs font-bold uppercase tracking-widest transition-all block w-full">
-            Forgot PIN?
+            {t('forgot_pin')}
           </button>
+          <div className="mt-4 flex justify-center">
+            <AppSwitcher />
+          </div>
         </div>
         <ForgotPinModal isOpen={showForgotPin} onClose={() => setShowForgotPin(false)} shopId={activeStoreId} />
       </div>
@@ -472,16 +478,17 @@ export default function SalesPage() {
   return (
     <div className="flex flex-col h-screen bg-[#f0f4f8] text-gray-800 overflow-hidden font-sans select-none">
       <div className="bg-[#c0392b] text-white flex items-center px-4 py-1.5 text-[11px] font-bold gap-4 flex-shrink-0 shadow-md">
-        <div className="font-black text-sm uppercase tracking-widest">ScanMart POS</div>
+        <div className="font-black text-sm uppercase tracking-widest">{t('app_name')} POS</div>
         <div className="text-red-200">Emp#: {currentStaff?.name?.split(' ')[0] || 'Staff'}</div>
         <div className="text-red-200">Store: {activeStoreId?.slice(0, 8)}</div>
         <div className="ml-auto flex items-center gap-3">
+          <AppSwitcher />
           <span className="text-red-200">{new Date().toLocaleDateString('en-IN')} {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
           <span className={`font-black px-2 py-0.5 rounded text-[10px] ${isOnline ? 'bg-green-600 text-white' : 'bg-yellow-400 text-black'}`}>
-            {syncing ? '↻ Syncing...' : isOnline ? '● ONLINE' : `● OFFLINE${offlineQueueCount > 0 ? ` (${offlineQueueCount} queued)` : ''}`}
+            {syncing ? '↻ Syncing...' : isOnline ? t('online') : `${t('offline')}${offlineQueueCount > 0 ? ` (${offlineQueueCount} queued)` : ''}`}
           </span>
           <button onClick={handleLogout} className="bg-red-800 hover:bg-red-900 px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
-            <LogOut size={10} /> Exit
+            <LogOut size={10} /> {t('exit')}
           </button>
         </div>
       </div>
@@ -505,7 +512,7 @@ export default function SalesPage() {
                 id="search-box"
                 autoFocus
                 type="text"
-                placeholder="Scan Barcode or Search Item (F2)..."
+                placeholder={t('scan_or_search')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 onKeyDown={e => {
@@ -520,7 +527,7 @@ export default function SalesPage() {
               />
             </div>
             <button onClick={() => setIsScanning(true)} className="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs font-bold flex items-center gap-1">
-              <Camera size={14} /> Scan
+              <Camera size={14} /> {t('scan')}
             </button>
           </div>
 
@@ -536,7 +543,7 @@ export default function SalesPage() {
           {cart.length === 0 && !searchTerm && (
             <div className="flex-1 overflow-y-auto p-3">
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <Zap size={10} className="text-yellow-500" /> Quick Add — Top Products
+                <Zap size={10} className="text-yellow-500" /> {t('quick_add')}
               </p>
               <div className="grid grid-cols-3 gap-2">
                 {products.slice(0, 12).map(p => {
@@ -575,23 +582,23 @@ export default function SalesPage() {
           )}
 
           <div className="bg-[#1a237e] text-white px-4 py-2 grid grid-cols-5 gap-4 text-center border-t border-blue-900">
-            <div><p className="text-[8px] text-blue-300 uppercase font-bold">Items</p><p className="text-sm font-black">{cart.reduce((a, i) => a + i.quantity, 0)}</p></div>
-            <div><p className="text-[8px] text-blue-300 uppercase font-bold">Discount</p><p className="text-sm font-black">₹{discountAmount.toFixed(0)}</p></div>
-            <div><p className="text-[8px] text-blue-300 uppercase font-bold">Savings</p><p className="text-sm font-black text-green-400">₹{totalSavings.toFixed(0)}</p></div>
-            <div><p className="text-[8px] text-blue-300 uppercase font-bold">Subtotal</p><p className="text-sm font-black">₹{subTotal.toFixed(0)}</p></div>
-            <div className="bg-green-600 rounded-lg py-0.5"><p className="text-[8px] text-green-200 uppercase font-bold">TOTAL</p><p className="text-base font-black">₹{finalTotal.toFixed(0)}</p></div>
+            <div><p className="text-[8px] text-blue-300 uppercase font-bold">{t('items')}</p><p className="text-sm font-black">{cart.reduce((a, i) => a + i.quantity, 0)}</p></div>
+            <div><p className="text-[8px] text-blue-300 uppercase font-bold">{t('discount')}</p><p className="text-sm font-black">₹{discountAmount.toFixed(0)}</p></div>
+            <div><p className="text-[8px] text-blue-300 uppercase font-bold">{t('savings')}</p><p className="text-sm font-black text-green-400">₹{totalSavings.toFixed(0)}</p></div>
+            <div><p className="text-[8px] text-blue-300 uppercase font-bold">{t('subtotal')}</p><p className="text-sm font-black">₹{subTotal.toFixed(0)}</p></div>
+            <div className="bg-green-600 rounded-lg py-0.5"><p className="text-[8px] text-green-200 uppercase font-bold">{t('total')}</p><p className="text-base font-black">₹{finalTotal.toFixed(0)}</p></div>
           </div>
         </div>
 
         <div className={`flex flex-col bg-[#f8fafc] border-l border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'flex-1' : 'w-[42%]'}`}>
           <div className="p-3 bg-white border-b border-gray-200">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Mobile Number:</p>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t('mobile_number')}:</p>
             <div
               className={`flex items-center border-2 rounded-lg px-3 py-2 cursor-text transition-all ${numpadTarget === 'mobile' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white'}`}
               onClick={() => setNumpadTarget('mobile')}
             >
               <Phone size={14} className="text-gray-400 mr-2 flex-shrink-0" />
-              <span className="font-black text-gray-800 text-lg tracking-widest flex-1">{phone || <span className="text-gray-300 font-normal text-sm">Tap numpad to enter...</span>}</span>
+              <span className="font-black text-gray-800 text-lg tracking-widest flex-1">{phone || <span className="text-gray-300 font-normal text-sm">{t('tap_numpad')}</span>}</span>
               {isExisting && <span className="text-[9px] bg-green-100 text-green-600 font-black px-1.5 py-0.5 rounded">VIP ❤</span>}
             </div>
             {isExisting && name && <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">● {name} — Spent ₹{totalSpent.toLocaleString()}</p>}
@@ -616,7 +623,7 @@ export default function SalesPage() {
           )}
 
           <div className="px-3 py-2 bg-white border-b border-gray-200 flex items-center gap-2">
-            <p className="text-[9px] font-black text-gray-400 uppercase">Discount:</p>
+            <p className="text-[9px] font-black text-gray-400 uppercase">{t('discount')}:</p>
             <button
               onClick={() => setDiscountType(t => t === 'percent' ? 'flat' : 'percent')}
               className="bg-blue-600 text-white text-[10px] font-black px-2 py-1 rounded transition-all"
@@ -710,14 +717,14 @@ export default function SalesPage() {
 
           <div className="px-3 pb-3 grid grid-cols-2 gap-2">
             <button onClick={holdCurrentBill} className="bg-amber-500 hover:bg-amber-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
-              <RotateCcw size={14} /> Hold
+              <RotateCcw size={14} /> {t('hold')}
             </button>
             <button onClick={() => { clearCart(); resetCustomer(); }} className="bg-red-500 hover:bg-red-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
-              <Trash2 size={14} /> Clear
+              <Trash2 size={14} /> {t('clear')}
             </button>
             {lastSale && (
               <button onClick={() => setShowReceipt(true)} className="col-span-2 bg-slate-700 hover:bg-slate-600 text-white py-2.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
-                <Printer size={13} /> Reprint Last Bill
+                <Printer size={13} /> {t('reprint')}
               </button>
             )}
           </div>
@@ -734,7 +741,7 @@ export default function SalesPage() {
               disabled={checkoutLoading || cart.length === 0}
               className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-black uppercase text-base tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
             >
-              {checkoutLoading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} /> Pay &amp; Print</>}
+              {checkoutLoading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} /> {t('pay_and_print')}</>}
               {!isOnline && <span className="text-[9px] bg-yellow-400 text-black px-1 rounded font-black">OFFLINE</span>}
             </button>
           </div>

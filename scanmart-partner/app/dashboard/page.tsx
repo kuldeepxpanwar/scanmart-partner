@@ -5,8 +5,11 @@ import { ArrowUpRight, Zap, Loader2, Calendar, IndianRupee, Wallet, ShieldCheck,
 import Link from "next/link";
 import ForgotPinModal from "@/components/ForgotPinModal";
 import { verifyPin } from "@/lib/pin";
+import { useApp } from "@/lib/AppContext";
+import AppSwitcher from "@/components/AppSwitcher";
 
 export default function DashboardHome() {
+  const { t } = useApp();
 
   const [loading, setLoading] = useState(true);
   const [isLocked, setIsLocked] = useState(true);
@@ -385,17 +388,17 @@ export default function DashboardHome() {
     const isAdmin = userRole === "admin" || userRole === "manager";
     if (isAdmin) {
       return [
-        { label: "Total Revenue", value: `₹${stats.totalRevenue.toLocaleString()}`, icon: <IndianRupee size={24} />, color: "bg-blue-500", trend: `+₹${stats.todaySales} Today` },
-        { label: "Total Orders", value: stats.totalOrders.toString(), icon: <ShoppingBag size={24} />, color: "bg-purple-500", trend: "Lifetime" },
-        { label: "Low Stock Alert", value: stats.lowStockCount.toString(), icon: <Package size={24} />, color: "bg-red-500", trend: stats.lowStockCount > 0 ? "Action Needed" : "All Good" },
-        { label: "Total Customers", value: stats.totalCustomers.toString(), icon: <Users size={24} />, color: "bg-emerald-500", trend: "Registered" },
+        { label: t('revenue'), value: `₹${stats.totalRevenue.toLocaleString()}`, icon: <IndianRupee size={24} />, color: "bg-blue-500", trend: `+₹${stats.todaySales} ${t('today')}` },
+        { label: t('sales'), value: stats.totalOrders.toString(), icon: <ShoppingBag size={24} />, color: "bg-purple-500", trend: "Lifetime" },
+        { label: t('low_stock'), value: stats.lowStockCount.toString(), icon: <Package size={24} />, color: "bg-red-500", trend: stats.lowStockCount > 0 ? "Action Needed" : "All Good" },
+        { label: t('customer'), value: stats.totalCustomers.toString(), icon: <Users size={24} />, color: "bg-emerald-500", trend: "Registered" },
       ];
     }
     return [
-      { label: "My Sales Today", value: `₹${stats.mySalesToday.toLocaleString()}`, icon: <TrendingUp size={24} />, color: "bg-blue-500", trend: "Performance" },
-      { label: "Bills Generated", value: stats.myOrdersCount.toString(), icon: <ShoppingBag size={24} />, color: "bg-purple-500", trend: "Today" },
-      { label: "Cash in Drawer", value: `₹${stats.cashInHand.toLocaleString()}`, icon: <Wallet size={24} />, color: "bg-emerald-500", trend: "Verify Now" },
-      { label: "Low Stock Alert", value: stats.lowStockCount.toString(), icon: <Package size={24} />, color: "bg-red-500", trend: "Check Inventory" },
+      { label: t('sales') + ` ${t('today')}`, value: `₹${stats.mySalesToday.toLocaleString()}`, icon: <TrendingUp size={24} />, color: "bg-blue-500", trend: "Performance" },
+      { label: "Bills", value: stats.myOrdersCount.toString(), icon: <ShoppingBag size={24} />, color: "bg-purple-500", trend: t('today') },
+      { label: t('cash'), value: `₹${stats.cashInHand.toLocaleString()}`, icon: <Wallet size={24} />, color: "bg-emerald-500", trend: "Verify" },
+      { label: t('low_stock'), value: stats.lowStockCount.toString(), icon: <Package size={24} />, color: "bg-red-500", trend: t('inventory') },
     ];
   };
 
@@ -411,8 +414,8 @@ export default function DashboardHome() {
           <div className="bg-blue-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border border-blue-500/20">
             <Lock size={32} className="text-blue-500" />
           </div>
-          <h2 className="text-xl font-black uppercase tracking-wider mb-2">Shop Locked</h2>
-          <p className="text-slate-500 text-xs mb-6 uppercase font-bold tracking-widest">Enter Your PIN To Access Dashboard</p>
+          <h2 className="text-xl font-black uppercase tracking-wider mb-2">{t('unlock_terminal')}</h2>
+          <p className="text-slate-500 text-xs mb-6 uppercase font-bold tracking-widest">{t('enter_pin')}</p>
 
           <div className="flex justify-center gap-2 mb-6">
             {[0, 1, 2, 3, 4, 5].map(i => (
@@ -433,15 +436,18 @@ export default function DashboardHome() {
           {pinError && <p className="text-red-500 text-xs font-bold mb-4 animate-pulse bg-red-500/10 py-2 rounded-lg border border-red-500/20">{pinError}</p>}
 
           <button onClick={handleUnlock} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-900/20">
-            Unlock Shop
+            {t('unlock_terminal')}
           </button>
 
           <button
             onClick={() => setShowForgotPin(true)}
             className="mt-4 text-slate-500 hover:text-blue-400 text-xs font-bold uppercase tracking-widest transition-all block w-full"
           >
-            Forgot PIN?
+            {t('forgot_pin')}
           </button>
+          <div className="mt-4 flex justify-center">
+            <AppSwitcher />
+          </div>
         </div>
         <ForgotPinModal isOpen={showForgotPin} onClose={() => setShowForgotPin(false)} shopId={activeStoreId} />
       </div>
@@ -593,12 +599,12 @@ export default function DashboardHome() {
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
           <div>
             <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md"><Zap size={32} fill="white" className="text-white" /></div>
-            <h3 className="text-3xl font-black italic uppercase leading-none mb-2 text-white">Quick<br />Billing</h3>
-            <p className="text-blue-100 text-xs font-medium opacity-80 leading-relaxed max-w-[200px]">Create new invoices instantly. Fast, secure, and printer-friendly.</p>
+            <h3 className="text-3xl font-black italic uppercase leading-none mb-2 text-white">{t('quick')}<br />{t('billing')}</h3>
+            <p className="text-blue-100 text-xs font-medium opacity-80 leading-relaxed max-w-[200px]">{t('create_invoices_instantly')}</p>
           </div>
           <Link href="/dashboard/sales">
             <button className="bg-white text-blue-700 w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all active:scale-95 shadow-xl flex items-center justify-center gap-2">
-              Start Selling <ArrowUpRight size={16} />
+              {t('pos_terminal')} <ArrowUpRight size={16} />
             </button>
           </Link>
         </div>
@@ -614,8 +620,8 @@ export default function DashboardHome() {
             <thead>
               <tr className="text-slate-500 text-[10px] font-black uppercase tracking-widest border-b border-slate-800">
                 <th className="pb-4 pl-4">ID</th>
-                <th className="pb-4">Customer</th>
-                <th className="pb-4">Amount</th>
+                <th className="pb-4">{t('customer')}</th>
+                <th className="pb-4">{t('amount')}</th>
                 <th className="pb-4">Method</th>
                 <th className="pb-4 text-right pr-4">Time</th>
               </tr>

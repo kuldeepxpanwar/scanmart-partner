@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Mail, Loader2, Zap, ArrowRight, Store, KeyRound } from "lucide-react";
+import AppSwitcher from "@/components/AppSwitcher";
 
 export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -409,7 +410,8 @@ export default function LoginPage() {
           </>
         )}
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <AppSwitcher />
           <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
             Secured by ScanMart Enclave™ v2.0
           </p>

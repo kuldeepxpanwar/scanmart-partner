@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShoppingCart, X } from 'lucide-react';
 import { CartItem, SellUnit } from '../../hooks/useCart';
+import { useApp } from '@/lib/AppContext';
 
 const UNIT_LABELS: Record<SellUnit, string> = {
     box: '📦 Box',
@@ -18,6 +19,7 @@ interface POSCartTableProps {
 }
 
 export default function POSCartTable({ cart, searchTerm, updateQuantity, removeFromCart, changeCartItemUnit }: POSCartTableProps) {
+    const { t } = useApp();
     // Determine available units for a product
     const getAvailableUnits = (item: CartItem): SellUnit[] => {
         if (item.pack_size <= 1 && item.strip_size <= 1) return ['piece'];
@@ -33,11 +35,11 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
             {/* Item LIST Header */}
             <div className="grid grid-cols-12 text-[10px] font-black text-gray-500 uppercase tracking-widest px-3 py-1.5 bg-gray-100 border-b border-gray-200">
                 <div className="col-span-1">#</div>
-                <div className="col-span-4">Item Description</div>
-                <div className="col-span-2 text-center">Unit</div>
-                <div className="col-span-2 text-center">Qty</div>
-                <div className="col-span-1 text-right">Rate</div>
-                <div className="col-span-2 text-right">Amount</div>
+                <div className="col-span-4">{t('item_description')}</div>
+                <div className="col-span-2 text-center">{t('unit')}</div>
+                <div className="col-span-2 text-center">{t('qty')}</div>
+                <div className="col-span-1 text-right">{t('rate')}</div>
+                <div className="col-span-2 text-right">{t('amount')}</div>
             </div>
 
             {/* Item ROWS */}
@@ -45,7 +47,7 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                 {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-300">
                         <ShoppingCart size={48} className="mb-3" />
-                        <p className="font-bold uppercase tracking-widest text-sm">Ready to Scan</p>
+                        <p className="font-bold uppercase tracking-widest text-sm">{t('ready_to_scan')}</p>
                     </div>
                 ) : (
                     cart.map((item, idx) => {
