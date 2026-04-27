@@ -464,8 +464,14 @@ export default function InventoryPage() {
 
     const sellPrice = Number(newItem.price) || Number(newItem.mrp);
 
+    // Combine base name + variant → "CHYMERA GEL" + "30 GM" = "CHYMERA GEL-30 GM"
+    const variantLabel = ((newItem as any).variant_label || '').trim().toUpperCase();
+    const finalName = variantLabel
+      ? `${newItem.name.trim()}-${variantLabel}`
+      : newItem.name.trim();
+
     const { data: prod, error } = await supabase.from("inventory").insert([{
-      name: newItem.name,
+      name: finalName,
       price: sellPrice,
       mrp: Number(newItem.mrp),
       buying_price: Number(newItem.buying_price) || 0,
@@ -1580,12 +1586,42 @@ export default function InventoryPage() {
               <button onClick={() => { setIsAddOpen(false); resetForm(); }} className="bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={20}/></button>
             </div>
             <div className="p-6 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Product Identity</p>
-              <input type="text" placeholder="Medicine Name (e.g. LEGITIM-100 TAB 10)"
-                className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 font-bold placeholder-slate-600"
-                value={newItem.name}
-                onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-              />
+              {/* Name + Variant — combined preview */}
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">Base Name (Generic)</label>
+                    <input type="text" placeholder="e.g. CHYMERA GEL"
+                      className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 font-bold placeholder-slate-600"
+                      value={newItem.name}
+                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-orange-400 mb-1 block">Size / Variant</label>
+                    <input type="text" placeholder="30 GM"
+                      className="w-28 bg-slate-800 p-3 rounded-xl border border-orange-500/40 outline-none focus:border-orange-500 font-bold text-orange-300 placeholder-slate-600 text-center"
+                      value={(newItem as any).variant_label || ''}
+                      onChange={(e) => setNewItem({ ...newItem, ...(({variant_label: e.target.value}) as any) })}
+                    />
+                  </div>
+                </div>
+                {/* Live Preview */}
+                {newItem.name && (newItem as any).variant_label && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <span className="text-[9px] text-slate-500 font-bold uppercase">Saved as:</span>
+                    <span className="text-blue-300 font-black text-sm">
+                      {newItem.name.trim()}-{((newItem as any).variant_label || '').trim().toUpperCase()}
+                    </span>
+                    <span className="text-[9px] text-green-400 ml-auto">separate stock</span>
+                  </div>
+                )}
+                {newItem.name && !(newItem as any).variant_label && (
+                  <p className="text-[9px] text-amber-400 font-bold">
+                    ⚠️ Add Size/Variant if multiple pack sizes exist (e.g. 15 GM, 30 GM, 200 ML)
+                  </p>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 block">Category</label>
@@ -2144,6 +2180,56 @@ export default function InventoryPage() {
                       → Sale: ₹{Math.round(Number(editItem.price) * (1 - Number(editItem.discount_percent) / 100))}
                     </span>
                   )}
+                </div>
+              </div>
+
+              {/* Clone as New Variant button */}
+              <div className="bg-orange-500/8 border border-orange-500/20 rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase text-orange-400 mb-1">Split into a New Size Variant</p>
+                <p className="text-[9px] text-slate-500 mb-3">
+                  Agar is product mein 2 sizes merge ho gayi hain (e.g. 15 GM + 30 GM ek saath),
+                  toh "Clone" karo — ek nayi separate product banegi zero stock ke saath.
+                  Phir original ka naam aur stock correct karo.
+                </p>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="New variant name e.g. CHYMERA GEL-15 GM"
+                    className="flex-1 bg-slate-800 p-2.5 rounded-xl border border-orange-500/30 outline-none text-orange-300 font-bold placeholder-slate-600 text-sm"
+                    id="clone-variant-name"
+                    defaultValue={editItem.name}
+                  />
+                  <button
+                    onClick={async () => {
+                      const newName = (document.getElementById('clone-variant-name') as HTMLInputElement)?.value?.trim();
+                      if (!newName) return toast.error('Variant name required!');
+                      if (newName === editItem.name) return toast.error('Name must be different from original!');
+                      const { error } = await supabase.from('inventory').insert([{
+                        name: newName,
+                        price: editItem.price,
+                        mrp: editItem.mrp,
+                        buying_price: editItem.buying_price,
+                        gst_rate: editItem.gst_rate,
+                        discount_percent: editItem.discount_percent || 0,
+                        stock: 0,
+                        category: editItem.category,
+                        supplier_id: editItem.supplier_id || null,
+                        store_id: activeStoreId,
+                        is_active: true,
+                        pack_size: editItem.pack_size || 1,
+                        strip_size: editItem.strip_size || 1,
+                        sell_unit: editItem.sell_unit || 'strip',
+                        hsn_code: editItem.hsn_code || null,
+                        manufacturer: editItem.manufacturer || null,
+                        composition: editItem.composition || null,
+                        reorder_level: editItem.reorder_level || 10,
+                      }]);
+                      if (error) { toast.error(error.message); return; }
+                      toast.success(`"${newName}" created with 0 stock! Add batches to it separately.`);
+                      fetchData();
+                    }}
+                    className="bg-orange-600 hover:bg-orange-500 px-4 py-2.5 rounded-xl font-black text-xs uppercase whitespace-nowrap transition-all active:scale-95"
+                  >
+                    Clone
+                  </button>
                 </div>
               </div>
 
