@@ -18,19 +18,28 @@ interface AppContextType {
   t: (key: string) => string;
 }
 
-const AppContext = createContext<AppContextType | null>(null);
+// ✅ Provide a safe default so useApp() never throws during SSR
+const defaultContext: AppContextType = {
+  theme: "dark",
+  toggleTheme: () => {},
+  setTheme: () => {},
+  lang: "hi",
+  toggleLang: () => {},
+  setLang: () => {},
+  t: (key: string) => translate(key, "hi"),
+};
+
+const AppContext = createContext<AppContextType>(defaultContext);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [lang, setLangState] = useState<Language>("hi");
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage
+  // Initialize from localStorage — only runs client-side
   useEffect(() => {
     const savedTheme = getTheme();
-    const savedLang = (typeof window !== "undefined"
-      ? localStorage.getItem("scanmart_lang") as Language
-      : null) || "hi";
+    const savedLang = (localStorage.getItem("scanmart_lang") as Language) || "hi";
 
     setThemeState(savedTheme);
     setLangState(savedLang);
@@ -61,22 +70,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const t = (key: string) => translate(key, lang);
 
-  // Prevent flash of wrong theme
-  if (!mounted) {
-    return <div style={{ visibility: "hidden" }}>{children}</div>;
-  }
-
   return (
+    // ✅ Always render Provider — never block children render
+    // suppressHydrationWarning prevents mismatch warnings during hydration
     <AppContext.Provider value={{ theme, toggleTheme, setTheme, lang, toggleLang, setLang, t }}>
-      {children}
+      <div suppressHydrationWarning style={!mounted ? { visibility: "hidden" } : undefined}>
+        {children}
+      </div>
     </AppContext.Provider>
   );
 }
 
+// ✅ No throw — returns default context during SSR/prerender
 export function useApp() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error("useApp must be used within AppProvider");
-  return ctx;
+  return useContext(AppContext);
 }
 
 export default AppProvider;
