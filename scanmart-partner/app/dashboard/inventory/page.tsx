@@ -49,7 +49,7 @@ interface InventoryItem {
   supplier_id: string | null;
   buying_price: number;
   gst_rate: number;
-  discount_percent: number; // 🔥 Product-level discount
+  discount_percent: number;
   created_at: string;
   last_sold_at: string | null;
   shop_id: string | null;
@@ -59,6 +59,11 @@ interface InventoryItem {
   pack_size?: number;
   strip_size?: number;
   sell_unit?: string;
+  // 💊 Pharmacy fields
+  hsn_code?: string;
+  manufacturer?: string;
+  composition?: string;
+  reorder_level?: number;
 }
 
 // 💊 Category-based packaging defaults
@@ -189,13 +194,22 @@ export default function InventoryPage() {
     image: "",
     supplier_id: "",
     buying_price: "",
-    gst_rate: "18",
-    discount_percent: "0", // 🔥 Discount field
+    gst_rate: "5",
+    discount_percent: "0",
     // 💊 Multi-unit packaging
-    pack_size: "1",
-    strip_size: "1",
-    sell_unit: "piece",
-    stock_boxes: "", // User enters boxes, we convert to tablets
+    pack_size: "10",
+    strip_size: "10",
+    sell_unit: "strip",
+    stock_boxes: "",
+    stock_strips: "",
+    // 💊 Pharmacy fields
+    hsn_code: "",
+    manufacturer: "",
+    composition: "",
+    reorder_level: "10",
+    // 🗓️ Quick batch
+    quick_batch_no: "",
+    quick_expiry: "",
   });
   const [editItem, setEditItem] = useState<any>(null);
 
@@ -429,58 +443,74 @@ export default function InventoryPage() {
     );
   };
 
-  // --- 🟢 ADD PRODUCT (Fixed for Multi-Store + Multi-Unit) ---
+  // --- 🟢 ADD PRODUCT (Pharmacy-First) ---
   const handleAddItem = async () => {
-    if (!newItem.name || !newItem.price) return alert("Name & Price required!");
-    if (!activeStoreId) return alert("No active store selected!");
-
+    if (!newItem.name || !newItem.mrp) return toast.error("Name & MRP required!");
+    if (!activeStoreId) return toast.error("No active store selected!");
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // 💊 Calculate total stock in tablets (smallest unit)
     const packSize = Number(newItem.pack_size) || 1;
     const stripSize = Number(newItem.strip_size) || 1;
     const stockBoxes = Number(newItem.stock_boxes) || 0;
+    const stockStrips = Number(newItem.stock_strips) || 0;
     const manualStock = Number(newItem.stock) || 0;
-    // If user entered boxes, convert to tablets. Otherwise use manual stock.
-    const totalStock = stockBoxes > 0 ? stockBoxes * packSize * stripSize : manualStock;
+    // Priority: boxes > strips > manual tablets
+    const totalStock = stockBoxes > 0
+      ? stockBoxes * packSize * stripSize
+      : stockStrips > 0
+        ? stockStrips * stripSize
+        : manualStock;
 
-    const { error } = await supabase.from("inventory").insert([
-      {
-        name: newItem.name,
-        price: Number(newItem.price),
-        mrp: Number(newItem.mrp) || Number(newItem.price),
+    const sellPrice = Number(newItem.price) || Number(newItem.mrp);
+
+    const { data: prod, error } = await supabase.from("inventory").insert([{
+      name: newItem.name,
+      price: sellPrice,
+      mrp: Number(newItem.mrp),
+      buying_price: Number(newItem.buying_price) || 0,
+      gst_rate: Number(newItem.gst_rate) || 5,
+      discount_percent: Number(newItem.discount_percent) || 0,
+      stock: totalStock,
+      category: newItem.category,
+      barcode: newItem.barcode || null,
+      supplier_id: newItem.supplier_id || null,
+      store_id: activeStoreId,
+      last_sold_at: null, is_active: true,
+      pack_size: packSize, strip_size: stripSize,
+      sell_unit: newItem.sell_unit || 'strip',
+      hsn_code: newItem.hsn_code || null,
+      manufacturer: newItem.manufacturer || null,
+      composition: newItem.composition || null,
+      reorder_level: Number(newItem.reorder_level) || 10,
+    }]).select('id').single();
+
+    if (error) { toast.error(error.message); return; }
+
+    // 🗓️ Quick Batch — if batch_no + expiry given
+    if (prod?.id && newItem.quick_batch_no && newItem.quick_expiry) {
+      await supabase.from('inventory_batches').insert({
+        product_id: prod.id, store_id: activeStoreId,
+        batch_number: newItem.quick_batch_no,
+        expiry_date: newItem.quick_expiry,
+        quantity: totalStock,
         buying_price: Number(newItem.buying_price) || 0,
-        gst_rate: Number(newItem.gst_rate) || 18,
-        stock: totalStock,
-        category: newItem.category,
-        barcode: newItem.barcode || null,
-        image: newItem.image || null,
-        supplier_id: newItem.supplier_id || null,
-        store_id: activeStoreId,
-        last_sold_at: null,
-        is_active: true,
-        // 💊 Multi-unit fields
-        pack_size: packSize,
-        strip_size: stripSize,
-        sell_unit: newItem.sell_unit || 'piece',
-      },
-    ]);
-    if (error) toast.error(error.message);
-    else {
-      setIsAddOpen(false);
-      resetForm();
-      fetchData();
-      toast.success(`Product added! Stock: ${totalStock} units`);
+      });
     }
+
+    setIsAddOpen(false); resetForm(); fetchData();
+    toast.success(`✅ Added! Stock: ${totalStock} ${newItem.sell_unit === 'strip' ? `tabs (${Math.floor(totalStock/stripSize)} strips)` : 'units'}`);
   };
 
   const resetForm = () => {
     setNewItem({
       name: "", price: "", mrp: "", stock: "", category: "General",
-      barcode: "", image: "", supplier_id: "", buying_price: "", gst_rate: "18",
+      barcode: "", image: "", supplier_id: "", buying_price: "", gst_rate: "5",
       discount_percent: "0",
-      pack_size: "1", strip_size: "1", sell_unit: "piece", stock_boxes: "",
+      pack_size: "10", strip_size: "10", sell_unit: "strip",
+      stock_boxes: "", stock_strips: "",
+      hsn_code: "", manufacturer: "", composition: "", reorder_level: "10",
+      quick_batch_no: "", quick_expiry: "",
     });
   };
 
@@ -499,13 +529,14 @@ export default function InventoryPage() {
         gst_rate: Number(editItem.gst_rate),
         discount_percent: Number(editItem.discount_percent) || 0,
         barcode: editItem.barcode || null,
-        image: editItem.image || null,
         supplier_id: editItem.supplier_id || null,
-        hsn_code: editItem.hsn_code || null,  // 🔑 HSN Code save
-        // 💊 Multi-unit fields
+        hsn_code: editItem.hsn_code || null,
+        manufacturer: editItem.manufacturer || null,
+        composition: editItem.composition || null,
+        reorder_level: Number(editItem.reorder_level) || 10,
         pack_size: Number(editItem.pack_size) || 1,
         strip_size: Number(editItem.strip_size) || 1,
-        sell_unit: editItem.sell_unit || 'piece',
+        sell_unit: editItem.sell_unit || 'strip',
       })
       .eq("id", editItem.id);
 
@@ -1538,28 +1569,28 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* 🔴 ADD MODAL (Updated with Supplier) */}
+      {/* 💊 ADD MEDICINE — Pharmacy-First Modal */}
       {isAddOpen && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h2 className="text-2xl font-bold mb-6 italic text-blue-500">New <span className="text-white">Product</span></h2>
-            <div className="space-y-4">
-              <input type="text" placeholder="Product Name" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-blue-500 transition-all"
-                value={newItem.name || ""}
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-start justify-center z-[100] p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl my-6">
+            <div className="flex justify-between items-center p-6 border-b border-slate-800">
+              <h2 className="text-xl font-black uppercase italic flex items-center gap-2 text-blue-400">
+            <div className="flex justify-between items-center p-6 border-b border-slate-800">
+              <h2 className="text-xl font-black uppercase italic flex items-center gap-2 text-blue-400">
+                <PackagePlus size={20}/> Add Medicine
+              </h2>
+              <button onClick={() => { setIsAddOpen(false); resetForm(); }} className="bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={20}/></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Product Identity</p>
+              <input type="text" placeholder="Medicine Name (e.g. LEGITIM-100 TAB 10)"
+                className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 font-bold placeholder-slate-600"
+                value={newItem.name}
                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
               />
-
-              <div className="relative">
-                <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                <input type="text" placeholder="Scan or Type Barcode" className="w-full bg-slate-800 p-3 pl-10 rounded-xl border border-slate-700 outline-none focus:border-blue-500 transition-all font-mono"
-                  value={newItem.barcode || ""}
-                  onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })}
-                />
-              </div>
-
-              {/* 💊 Category + Packaging Auto-Defaults */}
-              <div>
-                <label className="text-[10px] font-bold uppercase text-purple-400 mb-1 block">📦 Category (auto-sets packaging)</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 block">Category</label>
                 <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer"
                   value={newItem.category}
                   onChange={(e) => {
@@ -2009,20 +2040,64 @@ export default function InventoryPage() {
                 <input type="text" placeholder="Barcode" className="w-full bg-slate-800 p-3 pl-10 rounded-xl border border-slate-700 outline-none font-mono" value={editItem.barcode || ""} onChange={(e) => setEditItem({ ...editItem, barcode: e.target.value })} />
               </div>
 
-              {/* 🔑 HSN Code Field */}
+              {/* 🔑 HSN Code */}
               <div>
                 <label className="text-[10px] font-bold uppercase text-purple-400 mb-1 flex items-center gap-1">
                   <span>#</span> HSN Code
-                  {!editItem.hsn_code && <span className="text-amber-400 text-[9px] ml-1">(not set — required for GST invoice)</span>}
+                  {!editItem.hsn_code && <span className="text-amber-400 text-[9px] ml-1">(not set — required for GST)</span>}
                 </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="e.g. 3004, 300494, 3004060"
+                <input type="text" inputMode="numeric" placeholder="e.g. 3004, 300494, 3004060"
                   className="w-full bg-slate-800 p-3 rounded-xl border border-purple-500/30 outline-none focus:border-purple-500 font-mono text-purple-300 placeholder-slate-600"
-                  value={editItem.hsn_code || ""}
-                  onChange={(e) => setEditItem({ ...editItem, hsn_code: e.target.value })}
+                  value={editItem.hsn_code || ""} onChange={(e) => setEditItem({ ...editItem, hsn_code: e.target.value })}
                 />
+              </div>
+              {/* Manufacturer + Composition */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Manufacturer</label>
+                  <input type="text" placeholder="e.g. Cipla"
+                    className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
+                    value={editItem.manufacturer || ""} onChange={e => setEditItem({ ...editItem, manufacturer: e.target.value })}/>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Reorder Level</label>
+                  <input type="number" min="0" placeholder="10"
+                    className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-slate-300 font-bold text-center"
+                    value={editItem.reorder_level || "10"} onChange={e => setEditItem({ ...editItem, reorder_level: e.target.value })}/>
+                </div>
+              </div>
+              <input type="text" placeholder="Composition (e.g. Paracetamol 500mg)"
+                className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
+                value={editItem.composition || ""} onChange={e => setEditItem({ ...editItem, composition: e.target.value })}/>
+              {/* Pack Structure in Edit */}
+              <div className="bg-purple-900/15 border border-purple-500/20 rounded-xl p-3">
+                <p className="text-[10px] font-black uppercase text-purple-400 mb-2">📦 Pack Structure</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Strips/Box</label>
+                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-300 font-bold text-center outline-none"
+                      value={editItem.pack_size || 1} onChange={e => setEditItem({ ...editItem, pack_size: e.target.value })}/>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Tabs/Strip</label>
+                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-300 font-bold text-center outline-none"
+                      value={editItem.strip_size || 1} onChange={e => setEditItem({ ...editItem, strip_size: e.target.value })}/>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Sell As</label>
+                    <select className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none text-white cursor-pointer"
+                      value={editItem.sell_unit || 'strip'} onChange={e => setEditItem({ ...editItem, sell_unit: e.target.value })}>
+                      <option value="tablet">💊 Tablet</option>
+                      <option value="strip">📋 Strip</option>
+                      <option value="piece">📦 Piece</option>
+                    </select>
+                  </div>
+                </div>
+                {editItem.strip_size > 1 && editItem.mrp > 0 && (
+                  <p className="text-[10px] text-green-400 font-bold mt-2">
+                    ℹ️ Per tablet: ₹{(Number(editItem.mrp)/Number(editItem.strip_size)).toFixed(2)} · Stock: {editItem.stock} tabs = {Math.floor(editItem.stock/editItem.strip_size)} strips + {editItem.stock%editItem.strip_size} loose
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
