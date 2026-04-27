@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -1589,25 +1589,37 @@ export default function InventoryPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 block">Category</label>
-                <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer"
-                  value={newItem.category}
-                  onChange={(e) => {
-                    const cat = e.target.value;
-                    const defaults = CATEGORY_PACKAGING[cat] || CATEGORY_PACKAGING['General'];
-                    setNewItem({
-                      ...newItem,
-                      category: cat,
-                      pack_size: String(defaults.pack_size),
-                      strip_size: String(defaults.strip_size),
-                      sell_unit: defaults.sell_unit,
-                    });
-                  }}
-                >
-                  {Object.keys(CATEGORY_PACKAGING).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                  <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer"
+                    value={newItem.category}
+                    onChange={(e) => {
+                      const cat = e.target.value;
+                      const defaults = CATEGORY_PACKAGING[cat] || CATEGORY_PACKAGING['General'];
+                      setNewItem({
+                        ...newItem,
+                        category: cat,
+                        pack_size: String(defaults.pack_size),
+                        strip_size: String(defaults.strip_size),
+                        sell_unit: defaults.sell_unit,
+                      });
+                    }}
+                  >
+                    {Object.keys(CATEGORY_PACKAGING).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 block">Manufacturer</label>
+                  <input type="text" placeholder="e.g. Cipla (optional)"
+                    className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
+                    value={newItem.manufacturer} onChange={e => setNewItem({ ...newItem, manufacturer: e.target.value })}
+                  />
+                </div>
               </div>
+              <input type="text" placeholder="Composition / Salt (e.g. Paracetamol 500mg) — optional"
+                className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
+                value={newItem.composition} onChange={e => setNewItem({ ...newItem, composition: e.target.value })}
+              />
 
               {/* 💊 Packaging: Pack Size + Strip Size */}
               {(Number(newItem.pack_size) > 1 || Number(newItem.strip_size) > 1 || newItem.category === 'Tablet' || newItem.category === 'Capsule' || newItem.category === 'Pharmacy') && (
@@ -1710,7 +1722,7 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              <button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-2xl font-black mt-2 transition-all">SAVE PRODUCT</button>
+              <button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-2xl font-black mt-2 transition-all">SAVE MEDICINE</button>
               <button onClick={() => setIsAddOpen(false)} className="w-full text-slate-500 py-2">Cancel</button>
             </div>
           </div>
