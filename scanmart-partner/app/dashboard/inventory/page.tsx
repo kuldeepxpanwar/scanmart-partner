@@ -1829,10 +1829,12 @@ export default function InventoryPage() {
                         const duplicates = Object.entries(nameCount).filter(([, c]) => c > 1);
 
                         // Rate comparison with existing inventory
+                        // ✅ FIX: Compare effective_cost (rate after free goods) vs DB buying_price
+                        // Old bug: compared raw rate vs effective_cost → false 100% mismatch
                         const rateFlags = importPreview.map(r => {
                           const existing = products.find(p => p.name === r.product_name && p.is_active);
                           if (!existing) return { ...r, flag: 'new', oldRate: 0, diff: 0 };
-                          const diff = r.rate - existing.buying_price;
+                          const diff = r.effective_cost - existing.buying_price;  // ← effective_cost, not raw rate
                           const pctDiff = existing.buying_price > 0 ? Math.abs(diff / existing.buying_price) * 100 : 0;
                           if (pctDiff > 10) return { ...r, flag: 'high_diff', oldRate: existing.buying_price, diff, pctDiff };
                           if (pctDiff > 0) return { ...r, flag: 'minor_diff', oldRate: existing.buying_price, diff, pctDiff };
@@ -1946,7 +1948,8 @@ export default function InventoryPage() {
                           <tbody>
                             {importPreview.map((row, i) => {
                               const existing = products.find(p => p.name === row.product_name && p.is_active);
-                              const rateDiff = existing ? Math.abs(row.rate - existing.buying_price) / (existing.buying_price || 1) * 100 : 0;
+                              // ✅ FIX: use effective_cost (accounts for free goods), not raw rate
+                              const rateDiff = existing ? Math.abs(row.effective_cost - existing.buying_price) / (existing.buying_price || 1) * 100 : 0;
                               const isHighDiff = existing && rateDiff > 10;
                               const isNew = !existing;
                               return (
