@@ -154,6 +154,7 @@ export default function InventoryPage() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [newBatch, setNewBatch] = useState({ batch_number: '', expiry_date: '', quantity: '', buying_price: '' });
   const [batchSaving, setBatchSaving] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<any | null>(null); // inline edit
 
   // 💊 Pharmacy Import State
   const [importMode, setImportMode] = useState<'basic' | 'pharmacy'>('basic');
@@ -919,6 +920,18 @@ export default function InventoryPage() {
     setBatchLoading(false);
   };
 
+  // --- 🔄 SYNC: recalc inventory.stock from all batch quantities ---
+  const syncBatchStockToInventory = async (productId: string) => {
+    const { data: allBatches } = await supabase
+      .from('inventory_batches')
+      .select('quantity')
+      .eq('product_id', productId);
+    const totalQty = (allBatches || []).reduce((sum: number, b: any) => sum + Number(b.quantity || 0), 0);
+    await supabase.from('inventory').update({ stock: totalQty }).eq('id', productId);
+    // Update local products list too
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: totalQty } : p));
+  };
+
   const handleAddBatch = async () => {
     if (!newBatch.batch_number || !newBatch.expiry_date || !newBatch.quantity) {
       alert('Batch number, expiry date aur quantity required hai!');
@@ -934,7 +947,11 @@ export default function InventoryPage() {
       buying_price: Number(newBatch.buying_price) || 0,
     }).select().single();
     if (error) { alert('Error: ' + error.message); }
-    else { setBatches(prev => [...prev, data].sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())); }
+    else {
+      const updated = [...batches, data].sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+      setBatches(updated);
+      if (batchProduct?.id) await syncBatchStockToInventory(batchProduct.id);
+    }
     setNewBatch({ batch_number: '', expiry_date: '', quantity: '', buying_price: '' });
     setBatchSaving(false);
   };
@@ -942,6 +959,26 @@ export default function InventoryPage() {
   const handleDeleteBatch = async (batchId: string) => {
     await supabase.from('inventory_batches').delete().eq('id', batchId);
     setBatches(prev => prev.filter(b => b.id !== batchId));
+    if (batchProduct?.id) await syncBatchStockToInventory(batchProduct.id);
+    toast.success('Batch deleted & stock synced!');
+  };
+
+  const handleUpdateBatch = async (batch: any) => {
+    setBatchSaving(true);
+    const { error } = await supabase.from('inventory_batches').update({
+      batch_number: batch.batch_number,
+      expiry_date: batch.expiry_date,
+      quantity: Number(batch.quantity),
+      buying_price: Number(batch.buying_price) || 0,
+    }).eq('id', batch.id);
+    if (error) { toast.error('Update failed: ' + error.message); }
+    else {
+      setBatches(prev => prev.map(b => b.id === batch.id ? { ...batch } : b));
+      if (batchProduct?.id) await syncBatchStockToInventory(batchProduct.id);
+      setEditingBatch(null);
+      toast.success('Batch updated & stock synced!');
+    }
+    setBatchSaving(false);
   };
 
 
@@ -1464,20 +1501,89 @@ export default function InventoryPage() {
               ) : (
                 batches.map(batch => {
                   const expStatus = getExpiryStatus(batch.expiry_date);
+                  const isEditing = editingBatch?.id === batch.id;
                   return (
-                    <div key={batch.id} className={`flex justify-between items-center p-4 rounded-xl border ${expStatus.color} bg-opacity-10`}>
-                      <div>
-                        <p className="font-bold text-sm text-white">{expStatus.icon} {batch.batch_number}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          Expiry: <span className="font-bold">{new Date(batch.expiry_date).toLocaleDateString('en-IN')}</span>
-                          &nbsp;•&nbsp; Qty: <span className="font-bold">{batch.quantity}</span>
-                          &nbsp;•&nbsp; Buy: ₹{batch.buying_price}
-                        </p>
+                    <div key={batch.id} className={`rounded-xl border ${expStatus.color} bg-opacity-10`}>
+                      {/* Batch Row */}
+                      <div className="flex justify-between items-center p-4">
+                        <div>
+                          <p className="font-bold text-sm text-white">{expStatus.icon} {batch.batch_number}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Expiry: <span className="font-bold">{new Date(batch.expiry_date).toLocaleDateString('en-IN')}</span>
+                            &nbsp;•&nbsp; Qty: <span className="font-bold">{batch.quantity}</span>
+                            &nbsp;•&nbsp; Buy: &#8377;{batch.buying_price}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${expStatus.color}`}>{expStatus.label}</span>
+                          <button
+                            onClick={() => setEditingBatch(isEditing ? null : { ...batch })}
+                            className={`p-1.5 rounded-lg transition-all ${isEditing ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-700 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400'}`}
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button onClick={() => handleDeleteBatch(batch.id)} className="p-1.5 bg-red-500/10 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"><Trash2 size={12} /></button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${expStatus.color}`}>{expStatus.label}</span>
-                        <button onClick={() => handleDeleteBatch(batch.id)} className="p-1.5 bg-red-500/10 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"><Trash2 size={12} /></button>
-                      </div>
+
+                      {/* Inline Edit Form */}
+                      {isEditing && (
+                        <div className="px-4 pb-4 border-t border-slate-700/50 pt-3 space-y-3">
+                          <p className="text-[9px] font-black uppercase text-yellow-400 tracking-widest">Edit Batch</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Batch No.</label>
+                              <input type="text"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold outline-none focus:border-yellow-500 text-white"
+                                value={editingBatch.batch_number}
+                                onChange={e => setEditingBatch({ ...editingBatch, batch_number: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Expiry Date</label>
+                              <input type="date"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold outline-none focus:border-yellow-500 text-white"
+                                value={editingBatch.expiry_date?.slice(0, 10)}
+                                onChange={e => setEditingBatch({ ...editingBatch, expiry_date: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Quantity</label>
+                              <input type="number" min="0"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold outline-none focus:border-yellow-500 text-white text-center"
+                                value={editingBatch.quantity}
+                                onChange={e => setEditingBatch({ ...editingBatch, quantity: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Buying Price (&#8377;)</label>
+                              <input type="number" min="0"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold outline-none focus:border-yellow-500 text-white text-center"
+                                value={editingBatch.buying_price}
+                                onChange={e => setEditingBatch({ ...editingBatch, buying_price: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleUpdateBatch(editingBatch)}
+                              disabled={batchSaving}
+                              className="flex-1 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all"
+                            >
+                              {batchSaving ? 'Saving...' : 'Save & Sync Stock'}
+                            </button>
+                            <button
+                              onClick={() => setEditingBatch(null)}
+                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-black text-xs uppercase text-slate-400"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          <p className="text-[9px] text-green-400 font-bold">
+                            Auto-syncs inventory stock = sum of all batch quantities
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })
