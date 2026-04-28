@@ -4,10 +4,10 @@ import { CartItem, SellUnit } from '../../hooks/useCart';
 import { useApp } from '@/lib/AppContext';
 
 const UNIT_LABELS: Record<SellUnit, string> = {
-    box: '📦 Box',
-    strip: '💊 Strip',
-    tablet: '💉 Tab',
-    piece: '🔹 Pc',
+    box: 'BOX',
+    strip: 'TAB',
+    tablet: 'TAB',
+    piece: 'PC',
 };
 
 interface POSCartTableProps {
@@ -94,12 +94,14 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
             {/* Item LIST Header */}
             <div className="grid grid-cols-12 text-[10px] font-black text-white bg-[#1a237e] uppercase tracking-widest px-2 py-2 border-b border-blue-900 shadow-md">
                 <div className="col-span-1 text-center">+/-</div>
-                <div className="col-span-4">PRODUCT / BATCH</div>
+                <div className="col-span-3">PRODUCT NAME</div>
                 <div className="col-span-1 text-center">PACK</div>
                 <div className="col-span-1 text-center">MRP</div>
-                <div className="col-span-1 text-right">UNIT RATE</div>
+                <div className="col-span-1 text-center">BATCH</div>
+                <div className="col-span-1 text-center">EXPIRY</div>
+                <div className="col-span-1 text-center">RATE</div>
                 <div className="col-span-2 text-center">QTY</div>
-                <div className="col-span-2 text-right pr-2">AMOUNT</div>
+                <div className="col-span-1 text-right pr-2">AMOUNT</div>
             </div>
 
             {/* Item ROWS */}
@@ -128,52 +130,52 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                                     <input type="checkbox" checked={!isMuted} onChange={() => toggleMute?.(item.id)} className="w-4 h-4 cursor-pointer accent-blue-600" title="Include in Bill" />
                                 </div>
                                 {/* Product Details */}
-                                <div className="col-span-4 flex flex-col justify-center">
-                                    <p className={`font-bold text-xs truncate ${isMuted ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{item.name}</p>
+                                <div className="col-span-3 flex flex-col justify-center pr-1">
+                                    <p className={`font-bold text-[11px] truncate ${isMuted ? 'text-gray-500 line-through' : 'text-blue-900'}`} title={item.name}>{item.name}</p>
                                     <div className="flex gap-2 items-center mt-0.5">
-                                      {item.barcode && <p className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1 rounded border border-gray-200">{item.barcode}</p>}
-                                      {item.location && <p className="text-[9px] text-blue-500 font-bold">📍{item.location}</p>}
+                                      {item.location && <p className="text-[8px] text-blue-500 font-bold">📍{item.location}</p>}
                                     </div>
                                 </div>
                                 {/* Pack Size / Unit */}
                                 <div className="col-span-1 flex flex-col items-center justify-center">
-                                    {showUnitSelector ? (
-                                        <select
-                                            value={item.sell_unit}
-                                            onChange={(e) => changeCartItemUnit?.(item.id, e.target.value as SellUnit)}
-                                            className="bg-transparent border border-blue-300 rounded px-1 py-0.5 text-[9px] font-black text-blue-700 outline-none cursor-pointer"
-                                        >
-                                            {availableUnits.map(u => (
-                                                <option key={u} value={u}>{UNIT_LABELS[u]}</option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <span className="text-[10px] font-black text-gray-600">{UNIT_LABELS[item.sell_unit]}</span>
-                                    )}
+                                    <span className="text-[10px] font-black text-gray-600 uppercase">
+                                        {item.sell_unit === 'strip' ? `${item.strip_size || 10} TAB` : 
+                                         item.sell_unit === 'box' ? `${item.pack_size || 1} BOX` : 
+                                         item.sell_unit === 'piece' ? `1 ${item.name.toLowerCase().includes('syp') || item.name.toLowerCase().includes('ml') ? 'ML' : 'PC'}` : 
+                                         `${item.strip_size} TAB`}
+                                    </span>
                                 </div>
                                 {/* MRP */}
                                 <div className="col-span-1 text-center text-[10px] font-bold text-gray-500">
                                     {item.mrp.toFixed(2)}
                                 </div>
+                                {/* BATCH (Placeholder until DB link) */}
+                                <div className="col-span-1 text-center text-[10px] font-bold text-green-700">
+                                    {(item as any).batch_no || '---'}
+                                </div>
+                                {/* EXPIRY (Placeholder until DB link) */}
+                                <div className="col-span-1 text-center text-[10px] font-bold text-red-600">
+                                    {(item as any).expiry_date ? new Date((item as any).expiry_date).toLocaleDateString('en-GB', { month: '2-digit', year: '2-digit' }) : '---'}
+                                </div>
                                 {/* UNIT RATE */}
-                                <div className="col-span-1 text-right text-[11px] font-black text-green-700">
+                                <div className="col-span-1 text-center text-[11px] font-black text-blue-800">
                                     {item.price.toFixed(2)}
                                 </div>
                                 {/* QTY */}
                                 <div className="col-span-2 flex justify-center">
-                                    <div className="flex items-center border border-gray-300 rounded overflow-hidden bg-white shadow-sm">
-                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }} className="px-2 py-1 hover:bg-red-50 text-red-600 font-black text-sm leading-none transition-colors border-r border-gray-200">-</button>
-                                        <span className="px-2 text-xs font-black w-8 text-center text-gray-800">{item.quantity}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }} className="px-2 py-1 hover:bg-green-50 text-green-600 font-black text-sm leading-none transition-colors border-l border-gray-200">+</button>
+                                    <div className="flex items-center border border-gray-300 rounded overflow-hidden bg-white shadow-sm h-6">
+                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }} className="px-1.5 hover:bg-red-50 text-red-600 font-black text-sm leading-none transition-colors border-r border-gray-200">-</button>
+                                        <span className="px-1.5 text-xs font-black w-6 text-center text-gray-800">{item.quantity}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }} className="px-1.5 hover:bg-green-50 text-green-600 font-black text-sm leading-none transition-colors border-l border-gray-200">+</button>
                                     </div>
                                 </div>
                                 {/* AMOUNT & ACTIONS */}
-                                <div className="col-span-2 text-right text-xs font-black flex justify-end items-center gap-2 pr-2">
+                                <div className="col-span-1 text-right text-xs font-black flex justify-end items-center gap-1 pr-2">
                                     <span className={isMuted ? 'text-gray-400' : 'text-blue-900'}>
                                         {(item.price * item.quantity).toFixed(2)}
                                     </span>
-                                    <button onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity bg-red-50 rounded p-1">
-                                        <X size={14} strokeWidth={3} />
+                                    <button onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity bg-red-50 rounded p-0.5">
+                                        <X size={12} strokeWidth={3} />
                                     </button>
                                 </div>
                             </div>
