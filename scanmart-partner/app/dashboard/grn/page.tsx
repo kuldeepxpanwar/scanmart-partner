@@ -273,3 +273,330 @@ export default function GRNPage() {
     setView("list");
     fetchSessions(activeStoreId);
   };
+
+  const statusBadge = (status: string) => {
+    if (status === "finalized") return "bg-green-500/20 text-green-400 border border-green-500/30";
+    if (status === "cancelled") return "bg-red-500/20 text-red-400 border border-red-500/30";
+    return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  return (
+    <div className="p-4 md:p-8 bg-[#020617] min-h-screen text-white font-sans pb-32">
+
+      {/* HEADER */}
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          {view !== "list" && (
+            <button onClick={() => setView("list")} className="bg-slate-800 p-2 rounded-xl border border-slate-700 hover:bg-slate-700 transition-all">
+              <RotateCcw size={16} />
+            </button>
+          )}
+          <div>
+            <h1 className="text-3xl font-black italic uppercase flex items-center gap-2">
+              <ClipboardCheck className="text-green-500" /> GRN <span className="text-green-600">AUDIT</span>
+            </h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+              {view === "list" ? "Goods Receipt Notes — Staging before Inventory" : view === "create" ? "New GRN Session" : `Auditing: ${activeSession?.invoice_no || "Draft"}`}
+            </p>
+          </div>
+        </div>
+        {view === "list" && (
+          <button onClick={() => setView("create")} className="bg-green-600 hover:bg-green-500 px-5 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all">
+            <Plus size={16} /> New GRN
+          </button>
+        )}
+      </div>
+
+      {/* ── LIST VIEW ── */}
+      {view === "list" && (
+        <div className="space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-green-500" size={32} /></div>
+          ) : sessions.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-16 text-center">
+              <ClipboardCheck className="mx-auto text-slate-600 mb-4" size={48} />
+              <p className="text-slate-400 font-bold text-lg">No GRN sessions yet</p>
+              <p className="text-slate-600 text-sm mt-1">Create a new GRN to start auditing your stock</p>
+              <button onClick={() => setView("create")} className="mt-6 bg-green-600 hover:bg-green-500 px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all">
+                + New GRN
+              </button>
+            </div>
+          ) : (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-950 border-b border-slate-800">
+                  <tr>
+                    <th className="text-left px-5 py-4 text-[10px] font-black uppercase text-slate-500">Supplier / Invoice</th>
+                    <th className="text-left px-5 py-4 text-[10px] font-black uppercase text-slate-500">Date</th>
+                    <th className="text-center px-5 py-4 text-[10px] font-black uppercase text-slate-500">Items</th>
+                    <th className="text-center px-5 py-4 text-[10px] font-black uppercase text-slate-500">Value</th>
+                    <th className="text-center px-5 py-4 text-[10px] font-black uppercase text-slate-500">Status</th>
+                    <th className="text-right px-5 py-4 text-[10px] font-black uppercase text-slate-500">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map(s => (
+                    <tr key={s.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-all">
+                      <td className="px-5 py-4">
+                        <p className="font-bold text-white">{s.supplier_name || "—"}</p>
+                        <p className="text-[10px] text-slate-500 font-mono">{s.invoice_no || "No Invoice #"}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-400 text-xs font-bold">
+                        {s.invoice_date ? new Date(s.invoice_date).toLocaleDateString("en-IN") : new Date(s.created_at).toLocaleDateString("en-IN")}
+                      </td>
+                      <td className="px-5 py-4 text-center font-black text-white">{s.total_items || "—"}</td>
+                      <td className="px-5 py-4 text-center font-black text-green-400">
+                        {s.total_value ? `₹${Number(s.total_value).toLocaleString()}` : "—"}
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase ${statusBadge(s.status)}`}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        {s.status === "draft" ? (
+                          <button onClick={() => handleOpenAudit(s)} className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ml-auto">
+                            <Edit3 size={11} /> Audit
+                          </button>
+                        ) : (
+                          <button onClick={() => handleOpenAudit(s)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ml-auto">
+                            <Eye size={11} /> View
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CREATE VIEW ── */}
+      {view === "create" && (
+        <div className="max-w-lg mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-4">
+          <h2 className="text-lg font-black uppercase text-green-400 flex items-center gap-2"><Plus size={18} /> New GRN Session</h2>
+          <div>
+            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Supplier Name</label>
+            <input type="text" placeholder="e.g. Ashish Agencies" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold"
+              value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Invoice No.</label>
+              <input type="text" placeholder="e.g. INV-2024-001" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-mono"
+                value={form.invoice_no} onChange={e => setForm({ ...form, invoice_no: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Invoice Date</label>
+              <input type="date" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white"
+                value={form.invoice_date} onChange={e => setForm({ ...form, invoice_date: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Notes (optional)</label>
+            <textarea placeholder="Any notes about this delivery..." className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white resize-none h-20"
+              value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          </div>
+          <button onClick={handleCreateSession} disabled={saving || !form.supplier_name}
+            className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />} Create & Start Audit
+          </button>
+          <button onClick={() => setView("list")} className="w-full text-slate-500 text-xs font-bold uppercase py-2 hover:text-white transition-all">Cancel</button>
+        </div>
+      )}
+
+      {/* ── AUDIT VIEW ── */}
+      {view === "audit" && activeSession && (
+        <div className="space-y-6">
+          {/* Session Info Bar */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-4">
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Supplier</p>
+              <p className="font-black text-white">{activeSession.supplier_name || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Invoice #</p>
+              <p className="font-bold text-slate-300 font-mono">{activeSession.invoice_no || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Items</p>
+              <p className="font-black text-white">{items.length}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Total Value</p>
+              <p className="font-black text-green-400">₹{items.reduce((s, i) => s + (Number(i.qty) + Number(i.qty_free)) * Number(i.rate), 0).toLocaleString()}</p>
+            </div>
+            <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ${statusBadge(activeSession.status)}`}>{activeSession.status}</span>
+          </div>
+
+          {/* CSV Import (only if draft) */}
+          {activeSession.status === "draft" && (
+            <div className="bg-blue-900/15 border border-blue-500/20 rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase text-blue-400 mb-0.5">Bulk Import via CSV</p>
+                <p className="text-[9px] text-slate-500">Same format as Pharmacy Import CSV</p>
+              </div>
+              <label className="bg-blue-600 hover:bg-blue-500 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer transition-all">
+                <Upload size={14} /> Import CSV
+                <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
+              </label>
+            </div>
+          )}
+
+          {/* Items Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase text-slate-500">{items.length} Line Items — Review Before Finalizing</p>
+              {activeSession.status === "draft" && (
+                <span className="text-[9px] text-yellow-400 font-bold">⚠️ Not yet in Inventory</span>
+              )}
+            </div>
+            {itemsLoading ? (
+              <div className="flex justify-center py-10"><Loader2 className="animate-spin text-green-500" size={24} /></div>
+            ) : items.length === 0 ? (
+              <div className="text-center py-10 text-slate-500 text-sm font-bold">No items yet — add manually or import CSV</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-950 text-slate-500 font-bold uppercase">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Product</th>
+                      <th className="px-4 py-3 text-left">Batch / Expiry</th>
+                      <th className="px-4 py-3 text-center">Qty+Free</th>
+                      <th className="px-4 py-3 text-right">Rate / MRP</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      {activeSession.status === "draft" && <th className="px-4 py-3 text-center">Action</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(item => (
+                      <tr key={item.id} className={`border-b border-slate-800/50 hover:bg-slate-800/20 ${item.status === "rejected" ? "opacity-40" : ""}`}>
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-white">{item.product_name}</p>
+                          <p className="text-[9px] text-slate-500">
+                            {item.is_new_product ? <span className="text-blue-400 font-bold">NEW</span> : <span className="text-green-400 font-bold">MATCH</span>}
+                            {" · "}{item.category} · GST {item.gst_rate}%
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-mono text-slate-300">{item.batch_no || "—"}</p>
+                          <p className="text-[9px] text-slate-500">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString("en-IN") : "—"}</p>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <p className="font-black text-white">{Number(item.qty) + Number(item.qty_free)}</p>
+                          <p className="text-[9px] text-slate-500">{item.qty}+{item.qty_free} free</p>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <p className="font-bold text-white">₹{item.rate}</p>
+                          <p className="text-[9px] text-slate-500">MRP ₹{item.mrp}</p>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase border ${
+                            item.status === "rejected" ? "bg-red-500/20 text-red-400 border-red-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"
+                          }`}>{item.status}</span>
+                        </td>
+                        {activeSession.status === "draft" && (
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => handleUpdateItem({ ...item, status: item.status === "rejected" ? "pending" : "rejected" })}
+                                className={`p-1.5 rounded-lg text-[9px] font-black transition-all ${item.status === "rejected" ? "bg-green-500/20 text-green-400 hover:bg-green-500/40" : "bg-red-500/10 text-red-400 hover:bg-red-500/30"}`}>
+                                {item.status === "rejected" ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                              </button>
+                              <button onClick={() => handleDeleteItem(item.id)} className="p-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-all">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Manual Add Item (draft only) */}
+          {activeSession.status === "draft" && (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1"><Plus size={12} /> Add Item Manually</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="md:col-span-2">
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Product Name *</label>
+                  <input type="text" placeholder="e.g. LENACEF CAP 10" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-sm"
+                    value={newItem.product_name} onChange={e => setNewItem({ ...newItem, product_name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Category</label>
+                  <select className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-white text-sm" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })}>
+                    {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">HSN</label>
+                  <input type="text" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-mono text-sm"
+                    value={newItem.hsn_code} onChange={e => setNewItem({ ...newItem, hsn_code: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Batch No.</label>
+                  <input type="text" placeholder="e.g. XF564" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-mono text-sm"
+                    value={newItem.batch_no} onChange={e => setNewItem({ ...newItem, batch_no: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Expiry (MM/YY)</label>
+                  <input type="text" placeholder="08/27" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-mono text-sm"
+                    value={newItem.expiry_date} onChange={e => setNewItem({ ...newItem, expiry_date: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Qty</label>
+                  <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
+                    value={newItem.qty} onChange={e => setNewItem({ ...newItem, qty: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Free</label>
+                  <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
+                    value={newItem.qty_free} onChange={e => setNewItem({ ...newItem, qty_free: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">MRP (₹)</label>
+                  <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
+                    value={newItem.mrp} onChange={e => setNewItem({ ...newItem, mrp: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Rate/Buy (₹)</label>
+                  <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
+                    value={newItem.rate} onChange={e => setNewItem({ ...newItem, rate: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">GST %</label>
+                  <input type="number" placeholder="5" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
+                    value={newItem.gst_rate} onChange={e => setNewItem({ ...newItem, gst_rate: e.target.value })} />
+                </div>
+              </div>
+              <button onClick={handleAddItem} className="bg-slate-700 hover:bg-green-700 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all">
+                <Plus size={14} /> Add Item
+              </button>
+            </div>
+          )}
+
+          {/* Finalize / Cancel */}
+          {activeSession.status === "draft" && (
+            <div className="flex gap-3">
+              <button onClick={handleFinalizeGRN} disabled={saving || items.filter(i => i.status !== "rejected").length === 0}
+                className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-40 py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all text-sm">
+                {saving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                Finalize GRN → Push to Inventory
+              </button>
+              <button onClick={handleCancelGRN} className="bg-slate-800 hover:bg-red-900/40 border border-slate-700 hover:border-red-500/30 px-5 py-4 rounded-2xl font-black text-xs uppercase text-slate-400 hover:text-red-400 transition-all">
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
