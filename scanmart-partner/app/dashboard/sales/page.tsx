@@ -74,6 +74,39 @@ export default function SalesPage() {
   const [showHeldBills, setShowHeldBills] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // --- REFS FOR HOTKEYS ---
+  const checkoutBtnRef = useRef<HTMLButtonElement>(null);
+
+  // --- WHATSAPP LOGIC ---
+  const handleWhatsApp = () => {
+     if (!phone) return alert("Please enter Patient Mobile first.");
+     const text = `Hello ${name ? name : 'Customer'},\nYour total bill at ScanMart is ₹${finalTotal.toFixed(2)}.\nThank you for visiting!`;
+     window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  // --- GLOBAL HOTKEYS (Phase 3) ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F2 -> Toggle TB
+      if (e.key === 'F2') {
+        e.preventDefault();
+        setIsTbPatient(prev => !prev);
+      }
+      // F4 -> Focus/Trigger Checkout
+      if (e.key === 'F4') {
+        e.preventDefault();
+        checkoutBtnRef.current?.click();
+      }
+      // Alt + W -> WhatsApp
+      if (e.altKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        handleWhatsApp();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [phone, name, finalTotal]);
+
   // --- 📶 OFFLINE MODE STATES ---
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -648,7 +681,7 @@ export default function SalesPage() {
              <option value="wholesale">Wholesale</option>
            </select>
 
-           <button className="ml-auto bg-[#25D366] hover:bg-[#128C7E] text-white px-3 py-1.5 rounded font-bold flex items-center gap-1.5 transition-colors shadow-sm">
+           <button onClick={handleWhatsApp} className="ml-auto bg-[#25D366] hover:bg-[#128C7E] text-white px-3 py-1.5 rounded font-bold flex items-center gap-1.5 transition-colors shadow-sm">
               <Phone size={12} /> <span className="uppercase text-[9px] tracking-widest">WhatsApp</span>
            </button>
         </div>
@@ -897,6 +930,7 @@ export default function SalesPage() {
 
           <div className="px-3 pb-4 mt-auto">
             <button
+              ref={checkoutBtnRef}
               onClick={() => {
                 if (paymentMethod === 'split') {
                   const diff = parseFloat((splitCash + splitUpi - finalTotal).toFixed(2));
@@ -910,6 +944,13 @@ export default function SalesPage() {
               {checkoutLoading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} /> {t('pay_and_print')}</>}
               {!isOnline && <span className="text-[9px] bg-yellow-400 text-black px-1 rounded font-black">OFFLINE</span>}
             </button>
+          </div>
+          
+          {/* --- SHORTCUT MAP --- */}
+          <div className="px-3 pb-2 text-center flex flex-wrap justify-center gap-3">
+             <span className="text-[8px] text-gray-400 font-bold uppercase"><kbd className="bg-gray-100 text-gray-500 border border-gray-200 px-1 rounded">F2</kbd> TB Patient</span>
+             <span className="text-[8px] text-gray-400 font-bold uppercase"><kbd className="bg-gray-100 text-gray-500 border border-gray-200 px-1 rounded">F4</kbd> Checkout</span>
+             <span className="text-[8px] text-gray-400 font-bold uppercase"><kbd className="bg-gray-100 text-gray-500 border border-gray-200 px-1 rounded">ALT+W</kbd> WhatsApp</span>
           </div>
         </div>
       </div>
