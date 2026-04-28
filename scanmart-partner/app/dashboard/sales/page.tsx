@@ -60,6 +60,8 @@ export default function SalesPage() {
   const [doctorsList, setDoctorsList] = useState<any[]>([]);
   const [isTbPatient, setIsTbPatient] = useState(false);
   const [rateProfile, setRateProfile] = useState<'retail' | 'wholesale'>('retail');
+  const [invoiceType, setInvoiceType] = useState<'Tax Invoice' | 'Estimate'>('Tax Invoice');
+  const [draftInvoiceNo, setDraftInvoiceNo] = useState("");
 
   // --- CUSTOM HOOK FOR CART ---
   const {
@@ -111,6 +113,10 @@ export default function SalesPage() {
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    setDraftInvoiceNo(generateInvoiceNumber());
+  }, []);
 
   const generateInvoiceNumber = () => {
     const date = new Date();
@@ -388,7 +394,7 @@ export default function SalesPage() {
 
     setCheckoutLoading(true);
 
-    const invoiceNumber = generateInvoiceNumber();
+    const invoiceNumber = draftInvoiceNo || generateInvoiceNumber();
     const offlineId = `offline_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
     // ── Calculate profit + GST ─────────────────────────────────
@@ -470,6 +476,7 @@ export default function SalesPage() {
         setShowReceipt(true); clearCart(); resetCustomerState();
         setSplitCash(0); setSplitUpi(0);
         setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
+        setDraftInvoiceNo(generateInvoiceNumber()); // Prepare next bill
       } catch (err: any) {
         alert("❌ Offline save failed: " + err.message);
       } finally {
@@ -543,6 +550,7 @@ export default function SalesPage() {
       setShowReceipt(true); clearCart(); resetCustomerState();
       setSplitCash(0); setSplitUpi(0); 
       setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
+      setDraftInvoiceNo(generateInvoiceNumber()); // Prepare next bill
       fetchProducts();
     } catch (err: any) { alert("Error: " + err.message); } finally { setCheckoutLoading(false); }
   };
@@ -648,6 +656,17 @@ export default function SalesPage() {
       {/* --- METADATA HEADER BAR --- */}
       <div className="bg-white border-b border-gray-300 px-4 py-1.5 flex items-center gap-4 text-[10px] shadow-sm z-20 flex-shrink-0">
         <div className="flex items-center gap-2 flex-1">
+           {/* Bill No & Type (New Additions) */}
+           <div className="flex flex-col border-r border-gray-300 pr-3 py-0.5">
+             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Bill No.</span>
+             <span className="text-xs font-black text-blue-900 leading-none">{draftInvoiceNo || '---'}</span>
+           </div>
+           
+           <select value={invoiceType} onChange={e => setInvoiceType(e.target.value as any)} className="border border-gray-300 rounded px-2 py-1.5 outline-none font-bold text-gray-700 cursor-pointer bg-blue-50 text-[10px] uppercase text-blue-800 mr-2 shadow-sm focus:border-blue-500">
+             <option value="Tax Invoice">Tax Invoice</option>
+             <option value="Estimate">Estimate</option>
+           </select>
+
            <div className="flex items-center border border-gray-300 rounded focus-within:border-blue-500 overflow-hidden bg-gray-50">
              <div className="bg-gray-200 px-2 py-1.5"><Phone size={12} className="text-gray-600" /></div>
              <input type="text" placeholder="Patient Mobile" className="outline-none py-1.5 px-2 w-28 text-gray-800 font-bold bg-transparent text-xs" 
