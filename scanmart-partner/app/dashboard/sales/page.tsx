@@ -317,8 +317,8 @@ export default function SalesPage() {
     setLoginLoading(false);
   };
 
-  const resetCustomer = () => { setPhone(""); setName(""); setTotalSpent(0); setIsExisting(false); setCustomerGstin(""); };
-  const handleLogout = () => { setCurrentStaff(null); clearCart(); resetCustomer(); };
+  const resetCustomerState = () => { resetCustomer(); setTotalSpent(0); setIsExisting(false); setCustomerGstin(""); };
+  const handleLogout = () => { setCurrentStaff(null); clearCart(); resetCustomerState(); };
 
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
@@ -423,7 +423,7 @@ export default function SalesPage() {
           staffName: currentStaff?.name,
           isOffline: true, // flag for receipt to show offline badge
         });
-        setShowReceipt(true); clearCart(); resetCustomer();
+        setShowReceipt(true); clearCart(); resetCustomerState();
         setSplitCash(0); setSplitUpi(0);
         setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
       } catch (err: any) {
@@ -496,7 +496,7 @@ export default function SalesPage() {
         splitUpi: paymentMethod === "split" ? splitUpi : undefined,
         staffName: currentStaff?.name,
       });
-      setShowReceipt(true); clearCart(); resetCustomer();
+      setShowReceipt(true); clearCart(); resetCustomerState();
       setSplitCash(0); setSplitUpi(0); 
       setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
       fetchProducts();
@@ -877,7 +877,7 @@ export default function SalesPage() {
             <button onClick={holdCurrentBill} className="bg-amber-500 hover:bg-amber-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
               <RotateCcw size={14} /> {t('hold')}
             </button>
-            <button onClick={() => { clearCart(); resetCustomer(); }} className="bg-red-500 hover:bg-red-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
+            <button onClick={() => { clearCart(); resetCustomerState(); }} className="bg-red-500 hover:bg-red-400 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95">
               <Trash2 size={14} /> {t('clear')}
             </button>
             {lastSale && (
