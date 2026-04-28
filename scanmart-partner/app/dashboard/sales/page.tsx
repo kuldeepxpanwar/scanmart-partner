@@ -641,7 +641,7 @@ export default function SalesPage() {
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-[#1a237e] text-white p-1 rounded-r-lg shadow-lg hover:bg-blue-700 transition-all"
-          style={{ left: sidebarCollapsed ? '0px' : 'calc(58% - 12px)' }}
+          style={{ left: sidebarCollapsed ? '0px' : 'calc(72% - 12px)' }}
           title={sidebarCollapsed ? 'Show Cart' : 'Collapse Cart'}
         >
           {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
