@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, X, Camera, Lock, LogOut, RotateCcw, ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, X, Camera, Lock, LogOut, RotateCcw, ChevronLeft, ChevronRight, Zap, AlertTriangle } from "lucide-react";
 
 // --- MODULAR IMPORTS ---
 import { useCart } from "@/hooks/useCart";
