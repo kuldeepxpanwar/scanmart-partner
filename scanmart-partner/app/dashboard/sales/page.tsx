@@ -539,7 +539,7 @@ export default function SalesPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [products, currentStaff, addToCart]);
 
-  const [numpadTarget, setNumpadTarget] = useState<'mobile' | 'discount' | null>(null);
+  const [numpadTarget, setNumpadTarget] = useState<'mobile' | 'discount' | 'gstin' | null>(null);
 
   if (!currentStaff) {
     return (
