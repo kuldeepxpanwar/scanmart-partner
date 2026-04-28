@@ -680,26 +680,31 @@ export default function SalesPage() {
 
            <div className="flex items-center border border-gray-300 rounded focus-within:border-blue-500 overflow-hidden bg-gray-50">
              <div className="bg-gray-200 px-2 py-1.5"><Phone size={12} className="text-gray-600" /></div>
-             <input type="text" placeholder="Patient Mobile" className="outline-none py-1.5 px-2 w-28 text-gray-800 font-bold bg-transparent text-xs" 
-                value={phone} onChange={e => handlePhoneSearch(e.target.value)} maxLength={10} />
+             <input type="text" id="patient-mobile" placeholder="Patient Mobile" className="outline-none py-1.5 px-2 w-28 text-gray-800 font-bold bg-transparent text-xs" 
+                value={phone} onChange={e => handlePhoneSearch(e.target.value)} maxLength={10} 
+                onKeyDown={e => e.key === 'Enter' && document.getElementById('patient-name')?.focus()} />
            </div>
-           <input type="text" placeholder="Patient Name" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-40 font-bold text-gray-800 text-xs" 
-              value={name} onChange={e => setName(e.target.value)} />
+           <input type="text" id="patient-name" placeholder="Patient Name" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-40 font-bold text-gray-800 text-xs" 
+              value={name} onChange={e => setName(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && document.getElementById('doctor-name')?.focus()} />
            {isExisting && <span className="bg-green-100 text-green-700 font-black px-2 py-1 rounded border border-green-200">VIP (₹{totalSpent})</span>}
            
            <div className="h-6 w-px bg-gray-300 mx-2"></div>
            
-           <input type="text" placeholder="GSTIN (B2B)" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-36 uppercase text-gray-800 text-xs font-bold" 
-              value={customerGstin} onChange={e => setCustomerGstin(e.target.value.toUpperCase())} maxLength={15} />
+           <input type="text" id="patient-gstin" placeholder="GSTIN (B2B)" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-36 uppercase text-gray-800 text-xs font-bold" 
+              value={customerGstin} onChange={e => setCustomerGstin(e.target.value.toUpperCase())} maxLength={15} 
+              onKeyDown={e => e.key === 'Enter' && document.getElementById('doctor-name')?.focus()} />
 
            <div className="relative flex items-center">
              <input 
                type="text" 
+               id="doctor-name"
                list="doctors-list"
                placeholder="Doctor Name..." 
                className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-purple-500 w-36 font-bold text-purple-700 text-xs bg-purple-50 placeholder-purple-300 uppercase"
                value={referringDoctor} 
                onChange={e => setReferringDoctor(e.target.value.toUpperCase())} 
+               onKeyDown={e => e.key === 'Enter' && document.getElementById('search-box')?.focus()}
              />
              <datalist id="doctors-list">
                 {doctorsList.map((doc, i) => <option key={i} value={doc.name} />)}
