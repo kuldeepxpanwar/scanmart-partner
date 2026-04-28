@@ -692,12 +692,19 @@ export default function SalesPage() {
            <input type="text" placeholder="GSTIN (B2B)" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-36 uppercase text-gray-800 text-xs font-bold" 
               value={customerGstin} onChange={e => setCustomerGstin(e.target.value.toUpperCase())} maxLength={15} />
 
-           {doctorsList.length > 0 && (
-              <select value={referringDoctor} onChange={e => setReferringDoctor(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 outline-none font-bold text-purple-700 cursor-pointer bg-purple-50 focus:border-purple-500 text-xs">
-                 <option value="">-- No DR. Referral --</option>
-                 {doctorsList.map((doc, i) => <option key={i} value={doc.name}>Dr. {doc.name}</option>)}
-              </select>
-           )}
+           <div className="relative flex items-center">
+             <input 
+               type="text" 
+               list="doctors-list"
+               placeholder="Doctor Name..." 
+               className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-purple-500 w-36 font-bold text-purple-700 text-xs bg-purple-50 placeholder-purple-300 uppercase"
+               value={referringDoctor} 
+               onChange={e => setReferringDoctor(e.target.value.toUpperCase())} 
+             />
+             <datalist id="doctors-list">
+                {doctorsList.map((doc, i) => <option key={i} value={doc.name} />)}
+             </datalist>
+           </div>
 
            <div className="h-6 w-px bg-gray-300 mx-2"></div>
 
