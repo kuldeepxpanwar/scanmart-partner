@@ -234,10 +234,11 @@ export default function GRNPage() {
       for (const item of approvedItems) {
         const totalQty = (Number(item.qty) || 0) + (Number(item.qty_free) || 0);
         let productId = item.matched_product_id;
+        const landedCost = Number(item.qty_free) > 0 ? (Number(item.qty) * Number(item.rate)) / totalQty : Number(item.rate);
         if (!productId) {
           const { data: np } = await supabase.from("inventory").insert({
             name: item.product_name, stock: totalQty, mrp: item.mrp,
-            price: item.mrp, buying_price: item.rate,
+            price: item.mrp, buying_price: landedCost,
             gst_rate: item.gst_rate, category: item.category,
             hsn_code: item.hsn_code, store_id: activeStoreId,
             is_active: true, last_sold_at: null
@@ -247,7 +248,7 @@ export default function GRNPage() {
           const existing = inventoryList.find(p => p.id === productId);
           await supabase.from("inventory").update({
             stock: (existing?.stock || 0) + totalQty,
-            buying_price: item.rate, mrp: item.mrp
+            buying_price: landedCost, mrp: item.mrp
           }).eq("id", productId);
           updCount++;
         }
@@ -255,7 +256,7 @@ export default function GRNPage() {
           await supabase.from("inventory_batches").insert({
             product_id: productId, store_id: activeStoreId,
             batch_number: item.batch_no, expiry_date: item.expiry_date,
-            quantity: totalQty, buying_price: item.rate
+            quantity: totalQty, buying_price: landedCost
           });
         }
       }
@@ -496,8 +497,15 @@ export default function GRNPage() {
                           <p className="text-[9px] text-slate-500">{item.qty}+{item.qty_free} free</p>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <p className="font-bold text-white">₹{item.rate}</p>
-                          <p className="text-[9px] text-slate-500">MRP ₹{item.mrp}</p>
+                          <p className="font-bold text-white">PTR: ₹{item.rate}</p>
+                          <p className="text-[9px] text-green-400 font-bold tracking-widest mt-0.5">
+                            LANDED: ₹{((Number(item.qty) * Number(item.rate)) / (Number(item.qty) + Number(item.qty_free)) || Number(item.rate)).toFixed(2)}
+                          </p>
+                          {Number(item.mrp) > 0 && (
+                            <p className="text-[9px] text-orange-300 font-bold mt-0.5 border-t border-slate-700 pt-0.5 inline-block">
+                              MARGIN: {(((Number(item.mrp) - ((Number(item.qty) * Number(item.rate)) / (Number(item.qty) + Number(item.qty_free)) || Number(item.rate))) / Number(item.mrp)) * 100).toFixed(1)}%
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase border ${
@@ -581,7 +589,7 @@ export default function GRNPage() {
                     value={newItem.mrp} onChange={e => setNewItem({ ...newItem, mrp: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Rate/Buy (₹)</label>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Rate/PTR (₹)</label>
                   <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
                     value={newItem.rate} onChange={e => setNewItem({ ...newItem, rate: e.target.value })} />
                 </div>
