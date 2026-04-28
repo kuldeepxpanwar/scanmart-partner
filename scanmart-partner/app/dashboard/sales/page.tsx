@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, X, Camera, Lock, LogOut, RotateCcw, ChevronLeft, ChevronRight, Zap, AlertTriangle } from "lucide-react";
+import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, X, Camera, Lock, LogOut, RotateCcw, ChevronLeft, ChevronRight, Zap, AlertTriangle, Book } from "lucide-react";
 
 // --- MODULAR IMPORTS ---
 import { useCart } from "@/hooks/useCart";
@@ -46,7 +46,7 @@ export default function SalesPage() {
     upi_id: ""
   });
 
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi" | "card" | "split">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi" | "card" | "split" | "udhaar">("cash");
   const [splitCash, setSplitCash] = useState(0);
   const [splitUpi, setSplitUpi] = useState(0);
 
@@ -331,6 +331,7 @@ export default function SalesPage() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return alert("❌ Cart Empty!");
+    if (paymentMethod === "udhaar" && !phone) return alert("❌ Phone number is required for Udhaar / Khata billing!");
 
     // Check for H1 drugs and enforce compliance
     const hasH1 = cart.some((item: any) => item.is_h1);
@@ -436,15 +437,29 @@ export default function SalesPage() {
       let customerId = null;
       if (phone) {
         const { data: existingCustomer } = await supabase
-          .from("customers").select("total_spent")
+          .from("customers").select("total_spent, khata_balance")
           .eq("phone", phone).eq("store_id", activeStoreId).maybeSingle();
         const currentSpent = Number(existingCustomer?.total_spent || 0);
+        const currentKhata = Number(existingCustomer?.khata_balance || 0);
+        const newKhata = paymentMethod === "udhaar" ? currentKhata + finalTotal : currentKhata;
+
         const { data: customer } = await supabase.from("customers").upsert({
           name: name || "Guest", phone,
           total_spent: currentSpent + finalTotal,
+          khata_balance: newKhata,
           store_id: activeStoreId
         }, { onConflict: 'phone' }).select().maybeSingle();
         customerId = customer?.id;
+
+        if (paymentMethod === "udhaar" && customer?.id) {
+          await supabase.from("customer_khata_tx").insert({
+            store_id: activeStoreId,
+            customer_id: customer.id,
+            amount: finalTotal,
+            type: "credit",
+            note: "Udhaar for Invoice: " + invoiceNumber
+          });
+        }
       }
 
       salePayload.customer_id = customerId;
@@ -780,8 +795,8 @@ export default function SalesPage() {
           </div>
 
           <div className="px-3 pb-2">
-            <div className="grid grid-cols-4 gap-1.5 mb-2">
-              {(['cash', 'upi', 'card', 'split'] as const).map(m => (
+            <div className="grid grid-cols-5 gap-1.5 mb-2">
+              {(['cash', 'upi', 'card', 'split', 'udhaar'] as const).map(m => (
                 <button
                   key={m}
                   onClick={() => {
@@ -798,7 +813,8 @@ export default function SalesPage() {
                   {m === 'upi' && <QrCode size={11} />}
                   {m === 'card' && <CreditCard size={11} />}
                   {m === 'split' && <span className="text-[8px]">⚡</span>}
-                  {m === 'split' ? 'Split' : m}
+                  {m === 'udhaar' && <Book size={11} />}
+                  {m === 'split' ? 'Split' : m === 'udhaar' ? 'Udhaar' : m}
                 </button>
               ))}
             </div>

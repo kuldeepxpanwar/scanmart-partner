@@ -8,7 +8,8 @@ import autoTable from "jspdf-autotable";
 import {
   Users, Search, X, History, Calendar, Crown,
   Loader2, Phone, Megaphone, Gift, Share2, ArrowUpRight,
-  ShoppingBag, Download, TrendingUp, TrendingDown, FileText, FileSpreadsheet
+  ShoppingBag, Download, TrendingUp, TrendingDown, FileText, FileSpreadsheet,
+  HeartPulse, Book
 } from "lucide-react";
 import Paginator from "@/components/Paginator";
 
@@ -19,6 +20,7 @@ const OFFER_TEMPLATES = [
   { id: 1, title: "🎉 Festive Sale", text: "Namaste {name}! ScanMart par dhamakedaar sale shuru ho gayi hai. Aaj hi aayein aur best deals payein!" },
   { id: 2, title: "📉 Clearance Offer", text: "Hello {name}, Stock clearance sale! Flat 20% off on selected items. Jaldi aaiye, stock limited hai." },
   { id: 3, title: "❤️ We Miss You", text: "Namaste {name}, Bohot din se aap dikhe nahi! Aapke liye ek special gift wait kar raha hai store pe." },
+  { id: 4, title: "💊 Refill Reminder", text: "Namaste {name}, Aapki regular medicine (BP/Sugar) khatam hone wali hai. Kripya samay par refill karwa lein taaki dose miss na ho." },
 ];
 
 export default function CustomersPage() {
@@ -32,8 +34,15 @@ export default function CustomersPage() {
 
   // 📊 Filters & Sorting
   const [showVIPOnly, setShowVIPOnly] = useState(false);
+  const [showChronicOnly, setShowChronicOnly] = useState(false);
   const [vipCount, setVipCount] = useState(10);
   const [stats, setStats] = useState({ total: 0, newThisWeek: 0, growth: 0 });
+
+  // 📒 Khata State
+  const [khataModalOpen, setKhataModalOpen] = useState(false);
+  const [selectedKhataCustomer, setSelectedKhataCustomer] = useState<any>(null);
+  const [khataPayAmount, setKhataPayAmount] = useState("");
+  const [khataLoading, setKhataLoading] = useState(false);
 
   // 📥 Export State
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -229,10 +238,49 @@ export default function CustomersPage() {
     window.open(url, "_blank");
   };
 
+  const toggleChronic = async (customer: any) => {
+    const newStatus = !customer.is_chronic;
+    const { error } = await supabase.from("customers").update({ is_chronic: newStatus }).eq("id", customer.id);
+    if (!error) {
+      setCustomers(customers.map(c => c.id === customer.id ? { ...c, is_chronic: newStatus } : c));
+    }
+  };
+
+  const settleKhata = async () => {
+    if (!selectedKhataCustomer || !khataPayAmount) return;
+    const amount = Number(khataPayAmount);
+    if (amount <= 0 || amount > selectedKhataCustomer.khata_balance) return alert("Invalid amount");
+
+    setKhataLoading(true);
+    const newBalance = selectedKhataCustomer.khata_balance - amount;
+
+    // Update customer
+    const { error: custErr } = await supabase.from("customers").update({ khata_balance: newBalance }).eq("id", selectedKhataCustomer.id);
+    
+    // Log transaction
+    if (!custErr) {
+      await supabase.from("customer_khata_tx").insert({
+        store_id: activeStoreId,
+        customer_id: selectedKhataCustomer.id,
+        amount: amount,
+        type: "payment",
+        note: "Udhaar payment received"
+      });
+      setCustomers(customers.map(c => c.id === selectedKhataCustomer.id ? { ...c, khata_balance: newBalance } : c));
+      setKhataModalOpen(false);
+      setKhataPayAmount("");
+    }
+    setKhataLoading(false);
+  };
+
   let filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone?.includes(searchTerm)
   );
+
+  if (showChronicOnly) {
+    filteredCustomers = filteredCustomers.filter(c => c.is_chronic);
+  }
 
   if (showVIPOnly) {
     filteredCustomers = filteredCustomers.slice(0, vipCount);
@@ -285,10 +333,16 @@ export default function CustomersPage() {
         <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/50 p-2 rounded-2xl border border-slate-800">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowVIPOnly(!showVIPOnly)}
+              onClick={() => { setShowVIPOnly(!showVIPOnly); setShowChronicOnly(false); }}
               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${showVIPOnly ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
             >
               <Crown size={14} /> VIP Mode
+            </button>
+            <button
+              onClick={() => { setShowChronicOnly(!showChronicOnly); setShowVIPOnly(false); }}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${showChronicOnly ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+            >
+              <HeartPulse size={14} /> Chronic CRM
             </button>
 
             {showVIPOnly && (
@@ -353,9 +407,14 @@ export default function CustomersPage() {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center font-black text-lg text-slate-300 shadow-inner">
                   {c.name.charAt(0)}
                 </div>
-                <div>
-                  <h3 className="font-bold text-white text-base truncate w-40">{c.name}</h3>
-                  <p className="text-slate-500 text-xs font-medium flex items-center gap-1"><Phone size={10} /> {c.phone || "No Phone"}</p>
+                <div className="flex-1">
+                  <div className="flex justify-between items-center w-full">
+                    <h3 className="font-bold text-white text-base truncate w-32">{c.name}</h3>
+                    <button onClick={() => toggleChronic(c)} title="Toggle Chronic Patient (BP/Sugar)" className={`p-1.5 rounded-full transition-all ${c.is_chronic ? 'text-red-500 bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'text-slate-600 hover:bg-slate-800'}`}>
+                      <HeartPulse size={14} />
+                    </button>
+                  </div>
+                  <p className="text-slate-500 text-xs font-medium flex items-center gap-1 mt-0.5"><Phone size={10} /> {c.phone || "No Phone"}</p>
                 </div>
               </div>
 
@@ -364,7 +423,10 @@ export default function CustomersPage() {
                   <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Total Spent</p>
                   <p className={`font-black text-xl ${index < 3 && showVIPOnly ? 'text-amber-500' : 'text-white'}`}>₹{formatCurrency(c.total_spent)}</p>
                 </div>
-                <ShoppingBag className="text-slate-700" size={20} />
+                <div className="text-right cursor-pointer group" onClick={() => { if(c.khata_balance > 0) { setSelectedKhataCustomer(c); setKhataModalOpen(true); } }}>
+                  <p className="text-[9px] text-red-500/70 uppercase font-bold mb-1 group-hover:text-red-400 transition-colors">Udhaar (Khata)</p>
+                  <p className={`font-black text-xl transition-colors ${c.khata_balance > 0 ? 'text-red-500 group-hover:text-red-400' : 'text-slate-600'}`}>₹{formatCurrency(c.khata_balance || 0)}</p>
+                </div>
               </div>
 
               <div className="flex gap-2 mt-auto">
@@ -541,6 +603,44 @@ export default function CustomersPage() {
                   ))
                 )}
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {khataModalOpen && selectedKhataCustomer && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] w-full max-w-sm relative"
+            >
+              <button onClick={() => setKhataModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={18} /></button>
+              <h2 className="text-xl font-black text-white uppercase italic mb-4 flex items-center gap-2"><Book size={18} className="text-red-500" /> Settle Udhaar</h2>
+              
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 text-center">
+                <p className="text-xs text-slate-500 font-bold uppercase mb-1">{selectedKhataCustomer.name}'s Pending Dues</p>
+                <p className="text-3xl font-black text-red-500">₹{formatCurrency(selectedKhataCustomer.khata_balance)}</p>
+              </div>
+
+              <div className="mb-4">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Amount Received (₹)</label>
+                <input 
+                  type="number" 
+                  max={selectedKhataCustomer.khata_balance}
+                  value={khataPayAmount} 
+                  onChange={e => setKhataPayAmount(e.target.value)}
+                  className="w-full bg-slate-950 text-white text-lg font-black p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 transition-colors"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <button 
+                onClick={settleKhata} 
+                disabled={khataLoading || !khataPayAmount}
+                className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                {khataLoading ? <Loader2 size={16} className="animate-spin" /> : 'Settle Account'}
+              </button>
             </motion.div>
           </div>
         )}
