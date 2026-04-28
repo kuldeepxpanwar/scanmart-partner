@@ -169,7 +169,6 @@ export default function SalesPage() {
       .from("inventory")
       .select("*, mrp")
       .eq("store_id", activeStoreId)
-      .gt('stock', 0)
       .eq('is_active', true);
 
     if (error) console.error("Error fetching products:", error);
@@ -639,7 +638,7 @@ export default function SalesPage() {
                 <Zap size={10} className="text-yellow-500" /> {t('quick_add')}
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {products.slice(0, 12).map(p => {
+                {products.filter(p => p.stock > 0).slice(0, 12).map(p => {
                   const ss = Number(p.strip_size) || 1;
                   const stockLabel = ss > 1
                     ? `${Math.floor(p.stock / ss)}s+${p.stock % ss}t`
@@ -661,16 +660,48 @@ export default function SalesPage() {
           )}
           {/* BUG 4 FIX: Dropdown ab search bar ke relative position mein dikhtaa hai */}
           {searchTerm && (
-            <div className="absolute top-[4.5rem] left-2 right-2 bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto">
-              {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 8).map(p => (
-                <div key={p.id} onClick={() => { addToCart(p); setSearchTerm('') }} className="px-4 py-2 border-b border-gray-100 hover:bg-blue-50 cursor-pointer flex justify-between items-center">
-                  <div>
-                    <span className="text-sm font-bold text-gray-800">{p.name}</span>
-                    {p.barcode && <span className="text-[9px] text-gray-400 ml-2">#{p.barcode}</span>}
+            <div className="absolute top-[4.5rem] left-2 right-2 bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
+              {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || (p.composition && p.composition.toLowerCase().includes(searchTerm.toLowerCase()))).slice(0, 15).map(p => {
+                const isOOS = p.stock <= 0;
+                const substitutes = p.composition ? products.filter(sub => sub.id !== p.id && sub.stock > 0 && sub.composition && sub.composition.toLowerCase() === p.composition.toLowerCase()) : [];
+
+                return (
+                  <div key={p.id} className={`px-4 py-3 border-b border-gray-100 ${isOOS ? 'bg-red-50/30' : 'hover:bg-blue-50 cursor-pointer transition-colors'}`} onClick={() => { if(!isOOS) { addToCart(p); setSearchTerm(''); } }}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className={`text-sm font-bold ${isOOS ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{p.name}</span>
+                        {p.barcode && <span className="text-[9px] text-gray-400 ml-2">#{p.barcode}</span>}
+                        {p.composition && <div className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5 truncate max-w-[200px]">🧪 {p.composition}</div>}
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-xs font-black ${isOOS ? 'text-red-400' : 'text-blue-700'}`}>
+                          {isOOS ? 'Out of Stock' : `₹${p.price}`}
+                        </span>
+                        {!isOOS && <div className="text-[9px] font-bold text-green-600">Stock: {p.stock}</div>}
+                      </div>
+                    </div>
+
+                    {substitutes.length > 0 && (
+                      <div className={`mt-2 ${isOOS ? 'bg-green-50 border-green-200' : 'bg-blue-50/50 border-blue-100'} border rounded-lg p-2`} onClick={(e) => e.stopPropagation()}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 ${isOOS ? 'text-green-700' : 'text-blue-700'}`}>
+                          💊 Available Substitutes (Same Salt):
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {substitutes.slice(0, 4).map(sub => (
+                            <button
+                              key={sub.id}
+                              onClick={() => { addToCart(sub); setSearchTerm(''); }}
+                              className="bg-white border border-gray-200 hover:border-green-500 text-gray-800 text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1 transition-all active:scale-95"
+                            >
+                              {sub.name} <span className="text-green-600 font-black">₹{sub.price}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs font-black text-blue-700">₹{p.price}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
