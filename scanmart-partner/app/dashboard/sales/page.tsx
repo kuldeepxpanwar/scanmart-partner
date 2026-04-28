@@ -665,7 +665,6 @@ export default function SalesPage() {
                     setSearchTerm('');
                   }
                 }}
-                onFocus={() => setNumpadTarget(null)}
                 className="w-full bg-[#283593] text-white placeholder-blue-300 p-2 pl-8 rounded text-xs font-bold outline-none border border-blue-700 focus:border-blue-300"
               />
             </div>
