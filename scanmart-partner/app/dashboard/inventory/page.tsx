@@ -524,10 +524,16 @@ export default function InventoryPage() {
   // --- 🔵 EDIT PRODUCT ---
   const handleUpdateItem = async () => {
     if (!editItem || !editItem.id) return;
+    
+    const variantLabel = ((editItem as any)._variant_label || '').trim().toUpperCase();
+    const finalName = variantLabel
+      ? `${editItem.name.trim()}-${variantLabel}`
+      : editItem.name.trim();
+
     const { error } = await supabase
       .from("inventory")
       .update({
-        name: editItem.name,
+        name: finalName,
         price: Number(editItem.price),
         mrp: Number(editItem.mrp) || 0,
         buying_price: Number(editItem.buying_price) || 0,
@@ -2186,7 +2192,35 @@ export default function InventoryPage() {
           <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
             <h2 className="text-2xl font-bold mb-6 italic text-yellow-500">Edit <span className="text-white">Product</span></h2>
             <div className="space-y-4">
-              <input type="text" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none font-bold" value={editItem.name || ""} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })} />
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">Base Name (Generic)</label>
+                  <input type="text" placeholder="e.g. CHYMERA GEL"
+                    className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 font-bold placeholder-slate-600"
+                    value={editItem.name || ""} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-orange-400 mb-1 block">Size / Variant</label>
+                  <input type="text" placeholder="30 GM"
+                    className="w-28 bg-slate-800 p-3 rounded-xl border border-orange-500/40 outline-none focus:border-orange-500 font-bold text-orange-300 placeholder-slate-600 text-center"
+                    value={(editItem as any)._variant_label || ''}
+                    onChange={(e) => setEditItem({ ...editItem, _variant_label: e.target.value } as any)}
+                  />
+                </div>
+              </div>
+
+              {/* Live Preview for Edit Product if Variant is added */}
+              {(editItem as any)._variant_label && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
+                  <span className="text-[9px] text-slate-500 font-bold uppercase">Saved as:</span>
+                  <span className="text-blue-300 font-black text-sm">
+                    {editItem.name.trim()}-{((editItem as any)._variant_label || '').trim().toUpperCase()}
+                  </span>
+                  <span className="text-[9px] text-green-400 ml-auto">separate stock</span>
+                </div>
+              )}
+
               <div className="relative">
                 <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                 <input type="text" placeholder="Barcode" className="w-full bg-slate-800 p-3 pl-10 rounded-xl border border-slate-700 outline-none font-mono" value={editItem.barcode || ""} onChange={(e) => setEditItem({ ...editItem, barcode: e.target.value })} />

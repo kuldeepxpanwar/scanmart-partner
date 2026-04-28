@@ -126,11 +126,17 @@ export default function GRNPage() {
 
   const handleAddItem = async () => {
     if (!activeSession || !newItem.product_name) return toast.error("Product name required!");
-    const match = inventoryList.find(p => p.name.toLowerCase() === newItem.product_name.toLowerCase());
+    
+    const variantLabel = ((newItem as any)._variant_label || '').trim().toUpperCase();
+    const finalName = variantLabel
+      ? `${newItem.product_name.trim()}-${variantLabel}`
+      : newItem.product_name.trim();
+
+    const match = inventoryList.find(p => p.name.toLowerCase() === finalName.toLowerCase());
     const { data, error } = await supabase.from("grn_items").insert({
       grn_id: activeSession.id,
       store_id: activeStoreId,
-      product_name: newItem.product_name,
+      product_name: finalName,
       matched_product_id: match?.id || null,
       is_new_product: !match,
       category: newItem.category,
@@ -525,9 +531,18 @@ export default function GRNPage() {
               <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1"><Plus size={12} /> Add Item Manually</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div className="md:col-span-2">
-                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Product Name *</label>
-                  <input type="text" placeholder="e.g. LENACEF CAP 10" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-sm"
-                    value={newItem.product_name} onChange={e => setNewItem({ ...newItem, product_name: e.target.value })} />
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1">
+                      <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">Base Name (Generic)</label>
+                      <input type="text" placeholder="e.g. LENACEF CAP 10" className="w-full bg-slate-800 p-2.5 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 text-white font-bold text-sm placeholder-slate-600"
+                        value={newItem.product_name} onChange={e => setNewItem({ ...newItem, product_name: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold uppercase text-orange-400 mb-1 block">Size / Variant</label>
+                      <input type="text" placeholder="30 GM" className="w-28 bg-slate-800 p-2.5 rounded-xl border border-orange-500/40 outline-none focus:border-orange-500 font-bold text-orange-300 placeholder-slate-600 text-center text-sm"
+                        value={(newItem as any)._variant_label || ''} onChange={(e) => setNewItem({ ...newItem, _variant_label: e.target.value } as any)} />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Category</label>
