@@ -652,6 +652,7 @@ export default function SalesPage() {
                     <p className="text-[10px] font-black text-gray-800 truncate group-hover:text-blue-700 leading-tight">{p.name}</p>
                     <p className="text-[11px] font-black text-blue-600 mt-1">₹{p.price}</p>
                     <p className="text-[8px] text-gray-400">Stock: {stockLabel}</p>
+                    {p.location && <p className="text-[8px] text-blue-500 mt-0.5 font-bold">📍 {p.location}</p>}
                   </button>
                   );
                 })}
@@ -672,6 +673,7 @@ export default function SalesPage() {
                         <span className={`text-sm font-bold ${isOOS ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{p.name}</span>
                         {p.barcode && <span className="text-[9px] text-gray-400 ml-2">#{p.barcode}</span>}
                         {p.composition && <div className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5 truncate max-w-[200px]">🧪 {p.composition}</div>}
+                        {p.location && <div className="text-[9px] text-blue-500 font-bold leading-tight mt-1 inline-block bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">📍 Rack: {p.location}</div>}
                       </div>
                       <div className="text-right">
                         <span className={`text-xs font-black ${isOOS ? 'text-red-400' : 'text-blue-700'}`}>

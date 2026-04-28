@@ -57,6 +57,7 @@ interface InventoryItem {
   shop_id: string | null;
   is_active: boolean;
   sales_count?: number;
+  location: string | null;
   // 💊 Multi-unit fields
   pack_size?: number;
   strip_size?: number;
@@ -213,6 +214,8 @@ export default function InventoryPage() {
     // 🗓️ Quick batch
     quick_batch_no: "",
     quick_expiry: "",
+    // 📍 Location
+    location: "",
   });
   const [editItem, setEditItem] = useState<any>(null);
 
@@ -534,6 +537,7 @@ export default function InventoryPage() {
       manufacturer: newItem.manufacturer || null,
       composition: newItem.composition || null,
       reorder_level: Number(newItem.reorder_level) || 10,
+      location: newItem.location || null,
       is_h1: (newItem as any).is_h1 || false,
     }]).select('id').single();
 
@@ -562,7 +566,7 @@ export default function InventoryPage() {
       pack_size: "10", strip_size: "10", sell_unit: "strip",
       stock_boxes: "", stock_strips: "",
       hsn_code: "", manufacturer: "", composition: "", reorder_level: "10",
-      quick_batch_no: "", quick_expiry: "",
+      location: "", quick_batch_no: "", quick_expiry: "",
       is_h1: false,
     } as any);
   };
@@ -593,6 +597,7 @@ export default function InventoryPage() {
         manufacturer: editItem.manufacturer || null,
         composition: editItem.composition || null,
         reorder_level: Number(editItem.reorder_level) || 10,
+        location: editItem.location || null,
         pack_size: Number(editItem.pack_size) || 1,
         strip_size: Number(editItem.strip_size) || 1,
         sell_unit: editItem.sell_unit || 'strip',
@@ -938,7 +943,7 @@ export default function InventoryPage() {
   // Paginated slice
   const pagedProducts = filteredProducts.slice(
     (currentPage - 1) * INV_PAGE_SIZE,
-    currentPage * INV_PAGE_SIZE
+    currentPage - 1 + INV_PAGE_SIZE
   );
 
   const getAgingStatus = (lastSoldDate: string | null) => {
@@ -1483,6 +1488,7 @@ export default function InventoryPage() {
                           <div className="flex items-center gap-2 mt-1">
                             <p className={`text-[10px] font-bold uppercase ${aging.color}`}>{aging.label} • GST {item.gst_rate}%</p>
                             {item.barcode && <span className="text-[9px] text-slate-500 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 flex items-center gap-1"><ScanBarcode size={10} /> {item.barcode}</span>}
+                            {item.location && <span className="text-[9px] text-blue-400 font-bold bg-blue-950/50 px-2 py-0.5 rounded border border-blue-500/30 flex items-center gap-1">📍 {item.location}</span>}
                           </div>
                         </div>
                       </td>
@@ -1834,10 +1840,16 @@ export default function InventoryPage() {
                 </div>
               </label>
 
-              <input type="text" placeholder="Composition / Salt (e.g. Paracetamol 500mg) — optional"
-                className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
-                value={newItem.composition} onChange={e => setNewItem({ ...newItem, composition: e.target.value })}
-              />
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Composition / Salt</label>
+                  <input type="text" placeholder="e.g. Paracetamol 500mg" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={newItem.composition} onChange={(e) => setNewItem({ ...newItem, composition: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Rack / Shelf Location</label>
+                  <input type="text" placeholder="e.g. Rack A, Shelf 3" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 transition-all text-blue-100 placeholder-blue-900/50" value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} />
+                </div>
+              </div>
 
               {/* 💊 Packaging: Pack Size + Strip Size */}
               {(Number(newItem.pack_size) > 1 || Number(newItem.strip_size) > 1 || newItem.category === 'Tablet' || newItem.category === 'Capsule' || newItem.category === 'Pharmacy') && (
@@ -2338,7 +2350,19 @@ export default function InventoryPage() {
                   value={editItem.hsn_code || ""} onChange={(e) => setEditItem({ ...editItem, hsn_code: e.target.value })}
                 />
               </div>
-              {/* Manufacturer + Composition */}
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Composition / Salt</label>
+                  <input type="text" placeholder="e.g. Paracetamol 500mg" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.composition || ""} onChange={(e) => setEditItem({ ...editItem, composition: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Rack / Shelf Location</label>
+                  <input type="text" placeholder="e.g. Rack A, Shelf 3" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 transition-all text-blue-100 placeholder-blue-900/50" value={editItem.location || ""} onChange={(e) => setEditItem({ ...editItem, location: e.target.value })} />
+                </div>
+              </div>
+
+              {/* Manufacturer + Reorder Level */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Manufacturer</label>
@@ -2353,9 +2377,7 @@ export default function InventoryPage() {
                     value={editItem.reorder_level || "10"} onChange={e => setEditItem({ ...editItem, reorder_level: e.target.value })}/>
                 </div>
               </div>
-              <input type="text" placeholder="Composition (e.g. Paracetamol 500mg)"
-                className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
-                value={editItem.composition || ""} onChange={e => setEditItem({ ...editItem, composition: e.target.value })}/>
+
               {/* 💊 Packaging: Pack Size + Strip Size */}
               {(Number(editItem.pack_size) > 1 || Number(editItem.strip_size) > 1 || editItem.category === 'Tablet' || editItem.category === 'Capsule' || editItem.category === 'Pharmacy') && (
                 <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 space-y-2">
@@ -2483,6 +2505,7 @@ export default function InventoryPage() {
                         manufacturer: editItem.manufacturer || null,
                         composition: editItem.composition || null,
                         reorder_level: editItem.reorder_level || 10,
+                        location: editItem.location || null,
                       }]);
                       if (error) { toast.error(error.message); return; }
                       toast.success(`"${newName}" created with 0 stock! Add batches to it separately.`);
