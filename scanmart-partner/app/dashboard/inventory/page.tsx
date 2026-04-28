@@ -2240,86 +2240,57 @@ export default function InventoryPage() {
               <input type="text" placeholder="Composition (e.g. Paracetamol 500mg)"
                 className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
                 value={editItem.composition || ""} onChange={e => setEditItem({ ...editItem, composition: e.target.value })}/>
-              {/* Pack Structure in Edit */}
-              <div className="bg-purple-900/15 border border-purple-500/20 rounded-xl p-4 space-y-3">
-                <p className="text-[10px] font-black uppercase text-purple-400">📦 Pack Structure</p>
-
-                {/* Strips/Box × Tabs/Strip = per box */}
-                <div className="flex items-end gap-2 bg-slate-950/50 rounded-xl p-3">
-                  <div className="flex-1 text-center">
-                    <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Strips/Box</p>
-                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/40 text-purple-300 font-black text-center text-xl outline-none focus:border-purple-500"
-                      value={editItem.pack_size || 1} onChange={e => setEditItem({ ...editItem, pack_size: e.target.value })}/>
+              {/* 💊 Packaging: Pack Size + Strip Size */}
+              {(Number(editItem.pack_size) > 1 || Number(editItem.strip_size) > 1 || editItem.category === 'Tablet' || editItem.category === 'Capsule' || editItem.category === 'Pharmacy') && (
+                <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 space-y-2">
+                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">📦 Packaging Details</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Strips/Box</label>
+                      <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500"
+                        value={editItem.pack_size || 1}
+                        onChange={(e) => setEditItem({ ...editItem, pack_size: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Tabs/Strip</label>
+                      <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500"
+                        value={editItem.strip_size || 1}
+                        onChange={(e) => setEditItem({ ...editItem, strip_size: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Sell As</label>
+                      <select className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold outline-none focus:border-purple-500 cursor-pointer"
+                        value={editItem.sell_unit || 'strip'}
+                        onChange={(e) => setEditItem({ ...editItem, sell_unit: e.target.value })}
+                      >
+                        <option value="box">📦 Box</option>
+                        <option value="strip">💊 Strip</option>
+                        <option value="tablet">💉 Tablet</option>
+                      </select>
+                    </div>
                   </div>
-                  <span className="text-slate-500 font-black text-2xl mb-2">×</span>
-                  <div className="flex-1 text-center">
-                    <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Tabs/Strip</p>
-                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/40 text-purple-300 font-black text-center text-xl outline-none focus:border-purple-500"
-                      value={editItem.strip_size || 1} onChange={e => setEditItem({ ...editItem, strip_size: e.target.value })}/>
-                  </div>
-                  <span className="text-slate-500 font-black text-2xl mb-2">=</span>
-                  <div className="flex-1 text-center bg-purple-500/10 rounded-lg p-2">
-                    <p className="text-[9px] text-purple-400 uppercase font-bold">per box</p>
-                    <p className="text-purple-300 font-black text-2xl">{(Number(editItem.pack_size)||1)*(Number(editItem.strip_size)||1)}</p>
-                  </div>
-                </div>
-
-                {/* Sell As */}
-                <div className="flex gap-1">
-                  {(['tablet','strip','piece'] as const).map(v => (
-                    <button key={v} type="button" onClick={() => setEditItem({ ...editItem, sell_unit: v })}
-                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${(editItem.sell_unit||'strip') === v ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
-                      {v === 'tablet' ? '💊 Tablet' : v === 'strip' ? '📋 Strip' : '📦 Piece'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 3-way Stock Entry */}
-                <p className="text-[9px] font-bold uppercase text-slate-500">Adjust Stock — fill any one (overrides current):</p>
-                <div className="grid grid-cols-3 gap-2">
+                  {/* 💊 Boxes input → auto-convert */}
                   <div>
-                    <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Boxes</label>
-                    <input type="number" min="0" placeholder="–"
-                      className="w-full bg-slate-800 p-2.5 rounded-lg border border-orange-500/30 text-orange-300 font-bold text-center outline-none"
-                      value={(editItem as any)._stock_boxes || ''}
-                      onChange={e => {
-                        const b = Number(e.target.value)||0;
-                        const total = b*(Number(editItem.pack_size)||1)*(Number(editItem.strip_size)||1);
-                        setEditItem({ ...editItem, stock: total, _stock_boxes: e.target.value, _stock_strips: '' } as any);
-                      }}/>
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-yellow-400 uppercase block mb-1">Strips</label>
-                    <input type="number" min="0" placeholder="–"
-                      className="w-full bg-slate-800 p-2.5 rounded-lg border border-yellow-500/30 text-yellow-300 font-bold text-center outline-none"
-                      value={(editItem as any)._stock_strips || ''}
-                      onChange={e => {
-                        const s = Number(e.target.value)||0;
-                        const total = s*(Number(editItem.strip_size)||1);
-                        setEditItem({ ...editItem, stock: total, _stock_strips: e.target.value, _stock_boxes: '' } as any);
-                      }}/>
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-green-400 uppercase block mb-1">Tablets</label>
-                    <input type="number" min="0" placeholder="–"
-                      className="w-full bg-slate-800 p-2.5 rounded-lg border border-green-500/30 text-green-300 font-bold text-center outline-none"
-                      value={editItem.stock || ''}
-                      onChange={e => setEditItem({ ...editItem, stock: e.target.value, _stock_boxes: '', _stock_strips: '' } as any)}/>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase">Boxes in Stock</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="0" placeholder="e.g. 2"
+                        className="w-24 bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-400 font-bold text-center outline-none focus:border-purple-500"
+                        value={(editItem as any)._stock_boxes || ''}
+                        onChange={(e) => {
+                          const boxes = Number(e.target.value) || 0;
+                          const total = boxes * (Number(editItem.pack_size) || 1) * (Number(editItem.strip_size) || 1);
+                          setEditItem({ ...editItem, _stock_boxes: e.target.value, stock: String(total) });
+                        }}
+                      />
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        = {Number(editItem.stock) || 0} tablets total
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="bg-slate-800/60 rounded-lg px-3 py-2 flex justify-between items-center">
-                  <span className="text-[10px] text-slate-400 font-bold">Current Total:</span>
-                  <span className="text-green-400 font-black text-sm">
-                    {Number(editItem.stock)||0} tablets
-                    {Number(editItem.strip_size) > 1 && ` = ${Math.floor((Number(editItem.stock)||0)/Number(editItem.strip_size))} strips + ${(Number(editItem.stock)||0)%Number(editItem.strip_size)} loose`}
-                  </span>
-                </div>
-                {Number(editItem.strip_size) > 1 && Number(editItem.mrp) > 0 && (
-                  <p className="text-[10px] text-blue-400 font-bold">
-                    Per tablet: ₹{(Number(editItem.mrp)/Number(editItem.strip_size)).toFixed(2)}
-                  </p>
-                )}
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
