@@ -54,6 +54,7 @@ export default function SalesPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [isExisting, setIsExisting] = useState(false);
+  const [customerGstin, setCustomerGstin] = useState("");
   const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal');
 
   // --- CUSTOM HOOK FOR CART ---
@@ -316,6 +317,7 @@ export default function SalesPage() {
     setLoginLoading(false);
   };
 
+  const resetCustomer = () => { setPhone(""); setName(""); setTotalSpent(0); setIsExisting(false); setCustomerGstin(""); };
   const handleLogout = () => { setCurrentStaff(null); clearCart(); resetCustomer(); };
 
   useEffect(() => {
@@ -444,7 +446,7 @@ export default function SalesPage() {
         const newKhata = paymentMethod === "udhaar" ? currentKhata + finalTotal : currentKhata;
 
         const { data: customer } = await supabase.from("customers").upsert({
-          name: name || "Guest", phone,
+          name: name || "Guest", phone, gstin: customerGstin || null,
           total_spent: currentSpent + finalTotal,
           khata_balance: newKhata,
           store_id: activeStoreId
@@ -508,10 +510,11 @@ export default function SalesPage() {
       if (data) {
         setIsExisting(true); setName(data.name);
         setTotalSpent(data.total_spent || 0);
+        setCustomerGstin(data.gstin || "");
       } else {
-        setIsExisting(false); setName(""); setTotalSpent(0);
+        setIsExisting(false); setName(""); setTotalSpent(0); setCustomerGstin("");
       }
-    } else { setIsExisting(false); }
+    } else { setIsExisting(false); setCustomerGstin(""); }
   };
 
   const barcodeBuffer = useRef("");
@@ -743,6 +746,19 @@ export default function SalesPage() {
               {isExisting && <span className="text-[9px] bg-green-100 text-green-600 font-black px-1.5 py-0.5 rounded">VIP ❤</span>}
             </div>
             {isExisting && name && <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">● {name} — Spent ₹{totalSpent.toLocaleString()}</p>}
+            <div className={`mt-2 flex items-center border-2 rounded-lg px-3 py-1.5 cursor-text transition-all ${numpadTarget === 'gstin' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}
+              onClick={() => setNumpadTarget('gstin')}
+            >
+              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest w-12 flex-shrink-0">GSTIN</span>
+              <input 
+                type="text" 
+                value={customerGstin} 
+                onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
+                className="w-full bg-transparent text-xs font-black text-gray-700 outline-none uppercase placeholder:text-gray-300 placeholder:font-normal" 
+                placeholder="Optional for B2B" 
+                maxLength={15}
+              />
+            </div>
           </div>
 
           {heldBills.length > 0 && (

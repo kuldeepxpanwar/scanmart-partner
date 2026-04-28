@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, BarChart3, Users, Settings,
   Truck, LogOut, Zap, ShoppingCart, ScanBarcode, Shield,
   RefreshCcw, RotateCcw, FileText, Sparkles, ChevronRight, ChevronLeft, Menu,
-  ClipboardCheck, BookLock
+  ClipboardCheck, BookLock, FileSpreadsheet
 } from "lucide-react";
 import { useApp } from "@/lib/AppContext";
 import AppSwitcher from "@/components/AppSwitcher";
@@ -82,6 +82,7 @@ export default function Sidebar() {
     { label: t('customer'), icon: <Users size={20} />, href: "/dashboard/customers", roles: ["admin", "manager"] },
     { label: "Team Access", icon: <Shield size={20} />, href: "/dashboard/staff", roles: ["admin"] },
     { label: "Sticker Studio", icon: <ScanBarcode size={20} />, href: "/dashboard/stickers", roles: ["admin", "manager", "staff"] },
+    { label: "GST Reports", icon: <FileSpreadsheet size={20} />, href: "/dashboard/gst", roles: ["admin", "manager"] },
     { label: "Z-Report", icon: <FileText size={20} />, href: "/dashboard/zreport", roles: ["admin", "manager"] },
     { label: "Onboarding", icon: <Sparkles size={20} />, href: "/dashboard/onboarding", roles: ["admin"] },
     { label: t('settings'), icon: <Settings size={20} />, href: "/dashboard/settings", roles: ["admin"] },
