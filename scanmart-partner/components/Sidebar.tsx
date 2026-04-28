@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, BarChart3, Users, Settings,
   Truck, LogOut, Zap, ShoppingCart, ScanBarcode, Shield,
   RefreshCcw, RotateCcw, FileText, Sparkles, ChevronRight, ChevronLeft, Menu,
-  ClipboardCheck
+  ClipboardCheck, BookLock
 } from "lucide-react";
 import { useApp } from "@/lib/AppContext";
 import AppSwitcher from "@/components/AppSwitcher";
