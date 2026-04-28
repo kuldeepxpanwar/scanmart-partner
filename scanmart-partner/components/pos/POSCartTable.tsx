@@ -21,6 +21,62 @@ interface POSCartTableProps {
 
 export default function POSCartTable({ cart, searchTerm, updateQuantity, removeFromCart, changeCartItemUnit, toggleMute }: POSCartTableProps) {
     const { t } = useApp();
+    const [activeRowIndex, setActiveRowIndex] = React.useState(0);
+
+    // Reset active row if cart size shrinks below index
+    React.useEffect(() => {
+        if (activeRowIndex >= cart.length) {
+            setActiveRowIndex(Math.max(0, cart.length - 1));
+        }
+    }, [cart.length, activeRowIndex]);
+
+    // Keyboard Navigation for Cart Table
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (cart.length === 0) return;
+            
+            // Do not intercept if user is typing in an input field (except maybe we want to allow Escape)
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+                return;
+            }
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    setActiveRowIndex(prev => Math.min(prev + 1, cart.length - 1));
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    setActiveRowIndex(prev => Math.max(prev - 1, 0));
+                    break;
+                case 'ArrowLeft':
+                case '-':
+                    e.preventDefault();
+                    if (cart[activeRowIndex]) updateQuantity(cart[activeRowIndex].id, -1);
+                    break;
+                case 'ArrowRight':
+                case '+':
+                case '=':
+                    e.preventDefault();
+                    if (cart[activeRowIndex]) updateQuantity(cart[activeRowIndex].id, 1);
+                    break;
+                case ' ': // Space to toggle mute
+                    e.preventDefault();
+                    if (cart[activeRowIndex]) toggleMute?.(cart[activeRowIndex].id);
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    // e.preventDefault();
+                    // Optional: remove item on delete
+                    // if (cart[activeRowIndex]) removeFromCart(cart[activeRowIndex].id);
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [cart, activeRowIndex, updateQuantity, toggleMute, removeFromCart]);
+
     // Determine available units for a product
     const getAvailableUnits = (item: CartItem): SellUnit[] => {
         if (item.pack_size <= 1 && item.strip_size <= 1) return ['piece'];
@@ -31,8 +87,10 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
         return units;
     };
 
+    const activeItem = cart[activeRowIndex];
+
     return (
-        <>
+        <div className="flex flex-col h-full bg-white relative">
             {/* Item LIST Header */}
             <div className="grid grid-cols-12 text-[10px] font-black text-white bg-[#1a237e] uppercase tracking-widest px-2 py-2 border-b border-blue-900 shadow-md">
                 <div className="col-span-1 text-center">+/-</div>
@@ -45,7 +103,7 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
             </div>
 
             {/* Item ROWS */}
-            <div className="flex-1 overflow-y-auto relative">
+            <div className="flex-1 overflow-y-auto relative pb-8">
                 {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-300">
                         <ShoppingCart size={48} className="mb-3" />
@@ -56,8 +114,15 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                         const availableUnits = getAvailableUnits(item);
                         const showUnitSelector = availableUnits.length > 1;
                         const isMuted = item.is_muted;
+                        const isActive = idx === activeRowIndex;
+
                         return (
-                            <div key={item.id} className={`grid grid-cols-12 items-center px-2 py-1.5 border-b border-gray-200 group transition-all ${isMuted ? 'bg-gray-100 opacity-50 grayscale' : (idx % 2 === 0 ? 'bg-white' : 'bg-[#f8faff]')}`}>
+                            <div key={item.id} 
+                                onClick={() => setActiveRowIndex(idx)}
+                                className={`grid grid-cols-12 items-center px-2 py-1.5 border-b border-gray-200 group transition-all cursor-pointer
+                                ${isActive ? 'ring-2 ring-inset ring-blue-500 bg-blue-50 shadow-sm' : ''} 
+                                ${isMuted ? 'bg-gray-100 opacity-60 grayscale' : (!isActive && idx % 2 === 0 ? 'bg-white' : (!isActive ? 'bg-[#f8faff]' : ''))}`}
+                            >
                                 {/* Mute Checkbox */}
                                 <div className="col-span-1 flex justify-center items-center">
                                     <input type="checkbox" checked={!isMuted} onChange={() => toggleMute?.(item.id)} className="w-4 h-4 cursor-pointer accent-blue-600" title="Include in Bill" />
@@ -97,9 +162,9 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                                 {/* QTY */}
                                 <div className="col-span-2 flex justify-center">
                                     <div className="flex items-center border border-gray-300 rounded overflow-hidden bg-white shadow-sm">
-                                        <button onClick={() => updateQuantity(item.id, -1)} className="px-2 py-1 hover:bg-red-50 text-red-600 font-black text-sm leading-none transition-colors border-r border-gray-200">-</button>
+                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }} className="px-2 py-1 hover:bg-red-50 text-red-600 font-black text-sm leading-none transition-colors border-r border-gray-200">-</button>
                                         <span className="px-2 text-xs font-black w-8 text-center text-gray-800">{item.quantity}</span>
-                                        <button onClick={() => updateQuantity(item.id, 1)} className="px-2 py-1 hover:bg-green-50 text-green-600 font-black text-sm leading-none transition-colors border-l border-gray-200">+</button>
+                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }} className="px-2 py-1 hover:bg-green-50 text-green-600 font-black text-sm leading-none transition-colors border-l border-gray-200">+</button>
                                     </div>
                                 </div>
                                 {/* AMOUNT & ACTIONS */}
@@ -107,7 +172,7 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                                     <span className={isMuted ? 'text-gray-400' : 'text-blue-900'}>
                                         {(item.price * item.quantity).toFixed(2)}
                                     </span>
-                                    <button onClick={() => removeFromCart(item.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity bg-red-50 rounded p-1">
+                                    <button onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity bg-red-50 rounded p-1">
                                         <X size={14} strokeWidth={3} />
                                     </button>
                                 </div>
@@ -116,6 +181,23 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                     })
                 )}
             </div>
-        </>
+
+            {/* Dynamic Footer Panel (Item Details) */}
+            {activeItem && (
+                <div className="absolute bottom-0 left-0 right-0 bg-[#fffde7] border-t border-amber-200 p-2 flex justify-between items-center text-[10px] font-bold text-gray-800 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10">
+                    <div className="flex gap-4">
+                        <span><span className="text-gray-500 uppercase">Stock:</span> <span className="text-blue-700">{activeItem.stock}</span> <span className="text-gray-400 font-normal">{activeItem.sell_unit}s</span></span>
+                        <span><span className="text-gray-500 uppercase">Rack:</span> <span className="text-blue-700">{activeItem.location || 'N/A'}</span></span>
+                        <span><span className="text-gray-500 uppercase">Buy Price:</span> <span className="text-blue-700">₹{activeItem.buying_price?.toFixed(2) || 'N/A'}</span></span>
+                    </div>
+                    <div>
+                        <span className="text-gray-500 uppercase tracking-widest mr-1">Est. Margin:</span>
+                        <span className="text-green-700 font-black text-xs bg-green-100 px-1.5 py-0.5 rounded border border-green-200">
+                           {activeItem.buying_price && activeItem.price > 0 ? `${(((activeItem.price - activeItem.buying_price) / activeItem.price) * 100).toFixed(1)}%` : 'N/A'}
+                        </span>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
