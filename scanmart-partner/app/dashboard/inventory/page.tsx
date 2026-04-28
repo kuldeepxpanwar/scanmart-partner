@@ -233,6 +233,12 @@ export default function InventoryPage() {
   const [expiryFilter, setExpiryFilter] = useState<'expired' | '30' | '60' | '90' | 'all'>('30');
   const [disposingId, setDisposingId] = useState<string | null>(null);
 
+  // --- 🧾 DEBIT NOTE STATES ---
+  const [debitNoteModal, setDebitNoteModal] = useState<{ open: boolean, batch: any }>({ open: false, batch: null });
+  const [debitSupplierId, setDebitSupplierId] = useState<string>('');
+  const [debitAmount, setDebitAmount] = useState<string>('');
+  const [debitNoteLoading, setDebitNoteLoading] = useState(false);
+
   // --- 🛒 SMART REORDER STATES ---
   const [reorderList, setReorderList] = useState<any[]>([]);
   const [reorderLoading, setReorderLoading] = useState(false);
@@ -334,7 +340,7 @@ export default function InventoryPage() {
       .from("inventory_batches")
       .select(`
         id, batch_number, expiry_date, quantity, buying_price,
-        inventory:product_id ( id, name, price, gst_rate )
+        inventory:product_id ( id, name, price, gst_rate, supplier_id )
       `)
       .eq("store_id", storeId)
       .gt("quantity", 0)
@@ -353,8 +359,44 @@ export default function InventoryPage() {
       .eq("id", batchId);
     if (!error) {
       setExpiryBatches(prev => prev.filter(b => b.id !== batchId));
+      fetchData(); // Refresh main inventory stock
+      toast.success('Batch disposed successfully!');
+    } else {
+      toast.error('Failed to dispose: ' + error.message);
     }
     setDisposingId(null);
+  };
+
+  const handleCreateDebitNote = async () => {
+    if (!debitSupplierId) return toast.error("Please select a supplier!");
+    if (!debitAmount || Number(debitAmount) <= 0) return toast.error("Enter a valid return amount!");
+    setDebitNoteLoading(true);
+
+    try {
+      // 1. Insert into supplier_credit_transactions as "payment" (to reduce outstanding balance)
+      const { error: txError } = await supabase.from("supplier_credit_transactions").insert({
+        supplier_id: debitSupplierId,
+        store_id: activeStoreId,
+        type: "payment",
+        amount: Number(debitAmount),
+        note: `Debit Note (Return): ${debitNoteModal.batch?.inventory?.name} [Batch: ${debitNoteModal.batch?.batch_number}]`,
+        date: new Date().toISOString().split("T")[0]
+      });
+      if (txError) throw txError;
+
+      // 2. Mark batch as disposed/returned (qty -> 0)
+      const { error: batchError } = await supabase.from("inventory_batches").update({ quantity: 0 }).eq("id", debitNoteModal.batch.id);
+      if (batchError) throw batchError;
+
+      toast.success("Debit Note generated & stock updated!");
+      setExpiryBatches(prev => prev.filter(b => b.id !== debitNoteModal.batch.id));
+      fetchData();
+      setDebitNoteModal({ open: false, batch: null });
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDebitNoteLoading(false);
+    }
   };
 
   // --- 🛒 SMART REORDER FETCH ---
@@ -1319,7 +1361,17 @@ export default function InventoryPage() {
                           </td>
                           <td className="px-4 py-3 text-right font-bold">{b.quantity}</td>
                           <td className="px-4 py-3 text-right font-black text-red-400">₹{valueAtRisk.toFixed(0)}</td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-3 text-center flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                setDebitSupplierId(b.inventory?.supplier_id || "");
+                                setDebitAmount(valueAtRisk.toFixed(2));
+                                setDebitNoteModal({ open: true, batch: b });
+                              }}
+                              className="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all"
+                            >
+                              Debit Note
+                            </button>
                             <button
                               onClick={() => showConfirm(
                                 'Mark as Disposed',
@@ -2474,21 +2526,72 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* CUSTOM CONFIRM DIALOG */}
-      {confirmDialog.open && (
+        </div>
+      )}
+
+      {/* 🔥 DEBIT NOTE MODAL */}
+      {debitNoteModal.open && debitNoteModal.batch && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center">
-            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
-              <AlertTriangle size={28} className="text-red-400" />
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-md shadow-2xl relative">
+            <button onClick={() => setDebitNoteModal({ open: false, batch: null })} className="absolute top-6 right-6 text-slate-500 hover:text-white bg-slate-800 p-2 rounded-full transition-all"><X size={18} /></button>
+            
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center shrink-0">
+                <Receipt size={24} className="text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white italic">Return <span className="text-blue-500">Challan</span></h3>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Create Debit Note</p>
+              </div>
             </div>
-            <h3 className="text-xl font-black text-white mb-2">{confirmDialog.title}</h3>
-            <p className="text-slate-400 text-sm mb-7 leading-relaxed">{confirmDialog.message}</p>
-            <div className="flex gap-3">
-              <button onClick={closeConfirm} className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-black text-sm text-slate-300 uppercase tracking-widest transition-all">
-                Cancel
-              </button>
-              <button onClick={confirmDialog.onConfirm} className={`flex-1 ${confirmDialog.confirmColor || 'bg-red-600 hover:bg-red-500'} py-3 rounded-2xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95`}>
-                {confirmDialog.confirmLabel || 'Confirm'}
+
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-5 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-xs text-slate-400">Product:</span>
+                <span className="text-xs font-bold text-white text-right">{debitNoteModal.batch.inventory?.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-slate-400">Batch & Qty:</span>
+                <span className="text-xs font-bold text-slate-300">#{debitNoteModal.batch.batch_number} ({debitNoteModal.batch.quantity} units)</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Select Supplier</label>
+                <select 
+                  className="w-full bg-slate-800 p-3.5 rounded-xl border border-slate-700 outline-none text-white cursor-pointer font-medium" 
+                  value={debitSupplierId} 
+                  onChange={(e) => setDebitSupplierId(e.target.value)}
+                >
+                  <option value="">-- Choose Supplier --</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {!debitSupplierId && debitNoteModal.batch.inventory?.supplier_id === null && (
+                  <p className="text-[10px] text-orange-400 mt-1 font-medium">⚠️ This product does not have a default supplier.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Debit Amount (₹)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                  <input 
+                    type="number" 
+                    className="w-full bg-slate-800 p-3.5 pl-8 rounded-xl border border-slate-700 outline-none text-white font-bold" 
+                    value={debitAmount} 
+                    onChange={(e) => setDebitAmount(e.target.value)} 
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">Default is estimated Value at Risk. Adjust if needed.</p>
+              </div>
+
+              <button 
+                onClick={handleCreateDebitNote} 
+                disabled={debitNoteLoading}
+                className="w-full mt-4 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2"
+              >
+                {debitNoteLoading ? <><Loader2 size={16} className="animate-spin" /> Processing...</> : "Generate Debit Note"}
               </button>
             </div>
           </div>
