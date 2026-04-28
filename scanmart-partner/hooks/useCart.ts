@@ -13,6 +13,7 @@ export interface CartItem {
     buying_price?: number;
     gst_rate?: number;
     is_muted?: boolean;
+    location?: string;
     // 💊 Multi-unit fields
     pack_size: number;    // strips per box
     strip_size: number;   // tablets per strip
