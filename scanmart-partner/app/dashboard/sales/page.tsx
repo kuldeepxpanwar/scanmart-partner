@@ -32,6 +32,10 @@ export default function SalesPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
+  // --- H1 DRUG COMPLIANCE ---
+  const [isH1ModalOpen, setIsH1ModalOpen] = useState(false);
+  const [h1Details, setH1Details] = useState({ doctorName: "", clinicName: "", patientDetails: "" });
+
   // --- SETTINGS ---
   const [storeSettings, setStoreSettings] = useState({
     shop_name: "ScanMart Store",
@@ -328,6 +332,14 @@ export default function SalesPage() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return alert("❌ Cart Empty!");
+
+    // Check for H1 drugs and enforce compliance
+    const hasH1 = cart.some((item: any) => item.is_h1);
+    if (hasH1 && (!h1Details.doctorName || !h1Details.clinicName || !h1Details.patientDetails)) {
+      setIsH1ModalOpen(true);
+      return;
+    }
+
     setCheckoutLoading(true);
 
     const invoiceNumber = generateInvoiceNumber();
@@ -364,6 +376,9 @@ export default function SalesPage() {
       staff_id: currentStaff?.id,
       store_id: activeStoreId,
       created_at: new Date().toISOString(),
+      doctor_name: hasH1 ? h1Details.doctorName : null,
+      clinic_name: hasH1 ? h1Details.clinicName : null,
+      patient_details: hasH1 ? h1Details.patientDetails : null,
     };
 
     const stockUpdates = cart.map((item) => ({
@@ -408,6 +423,7 @@ export default function SalesPage() {
         });
         setShowReceipt(true); clearCart(); resetCustomer();
         setSplitCash(0); setSplitUpi(0);
+        setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
       } catch (err: any) {
         alert("❌ Offline save failed: " + err.message);
       } finally {
@@ -465,7 +481,9 @@ export default function SalesPage() {
         staffName: currentStaff?.name,
       });
       setShowReceipt(true); clearCart(); resetCustomer();
-      setSplitCash(0); setSplitUpi(0); fetchProducts();
+      setSplitCash(0); setSplitUpi(0); 
+      setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
+      fetchProducts();
     } catch (err: any) { alert("Error: " + err.message); } finally { setCheckoutLoading(false); }
   };
 
@@ -822,6 +840,63 @@ export default function SalesPage() {
           </div>
         </div>
       </div>
+
+      {/* --- 🏥 H1 COMPLIANCE MODAL --- */}
+      {isH1ModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+          <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl relative">
+            <button onClick={() => setIsH1ModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+            <div className="flex items-center gap-3 mb-6 text-red-500">
+              <div className="bg-red-500/20 p-2 rounded-xl">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold uppercase tracking-wider">Schedule H1 Drug</h2>
+                <p className="text-[10px] text-red-400">Doctor & Patient Details Required</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Doctor Name *</label>
+                <input type="text" placeholder="e.g. Dr. R.K. Sharma"
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white focus:border-red-500 transition-colors"
+                  value={h1Details.doctorName} onChange={e => setH1Details({ ...h1Details, doctorName: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Clinic / Hospital Name *</label>
+                <input type="text" placeholder="e.g. City Care Hospital"
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white focus:border-red-500 transition-colors"
+                  value={h1Details.clinicName} onChange={e => setH1Details({ ...h1Details, clinicName: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Patient Details (Name & Contact) *</label>
+                <input type="text" placeholder="e.g. Rahul Verma, 9876543210"
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white focus:border-red-500 transition-colors"
+                  value={h1Details.patientDetails} onChange={e => setH1Details({ ...h1Details, patientDetails: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!h1Details.doctorName || !h1Details.clinicName || !h1Details.patientDetails) {
+                  return alert("Please fill all details for H1 Compliance!");
+                }
+                setIsH1ModalOpen(false);
+                handleCheckout(); // Resume checkout
+              }}
+              className="w-full mt-8 bg-red-600 hover:bg-red-500 text-white py-4 rounded-xl font-black uppercase tracking-widest transition-colors shadow-lg shadow-red-600/20 active:scale-95"
+            >
+              Confirm & Continue Checkout
+            </button>
+          </div>
+        </div>
+      )}
 
       {isScanning && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4">

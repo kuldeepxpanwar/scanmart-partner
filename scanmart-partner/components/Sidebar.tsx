@@ -74,6 +74,7 @@ export default function Sidebar() {
     { label: t('dashboard'), icon: <LayoutDashboard size={20} />, href: "/dashboard", roles: ["admin", "manager", "staff"] },
     { label: t('pos_terminal'), icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
     { label: "Returns", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager", "staff"] },
+    { label: "H1 Register", icon: <BookLock size={20} />, href: "/dashboard/h1-register", roles: ["admin", "manager"] },
     { label: t('inventory'), icon: <Package size={20} />, href: "/dashboard/inventory", roles: ["admin", "manager"] },
     { label: "GRN Audit", icon: <ClipboardCheck size={20} />, href: "/dashboard/grn", roles: ["admin", "manager"] },
     { label: t('supplier'), icon: <Truck size={20} />, href: "/dashboard/suppliers", roles: ["admin", "manager"] },

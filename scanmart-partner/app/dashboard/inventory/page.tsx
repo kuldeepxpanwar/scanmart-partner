@@ -490,6 +490,7 @@ export default function InventoryPage() {
       manufacturer: newItem.manufacturer || null,
       composition: newItem.composition || null,
       reorder_level: Number(newItem.reorder_level) || 10,
+      is_h1: (newItem as any).is_h1 || false,
     }]).select('id').single();
 
     if (error) { toast.error(error.message); return; }
@@ -518,7 +519,8 @@ export default function InventoryPage() {
       stock_boxes: "", stock_strips: "",
       hsn_code: "", manufacturer: "", composition: "", reorder_level: "10",
       quick_batch_no: "", quick_expiry: "",
-    });
+      is_h1: false,
+    } as any);
   };
 
   // --- 🔵 EDIT PRODUCT ---
@@ -550,6 +552,7 @@ export default function InventoryPage() {
         pack_size: Number(editItem.pack_size) || 1,
         strip_size: Number(editItem.strip_size) || 1,
         sell_unit: editItem.sell_unit || 'strip',
+        is_h1: (editItem as any).is_h1 || false,
       })
       .eq("id", editItem.id);
 
@@ -1764,6 +1767,19 @@ export default function InventoryPage() {
                   />
                 </div>
               </div>
+              
+              {/* Schedule H/H1 Checkbox */}
+              <label className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl cursor-pointer hover:bg-red-500/20 transition-colors">
+                <input type="checkbox" className="w-5 h-5 accent-red-500"
+                  checked={(newItem as any).is_h1 || false}
+                  onChange={e => setNewItem({ ...newItem, is_h1: e.target.checked } as any)}
+                />
+                <div>
+                  <p className="text-sm font-bold text-red-400">Schedule H / H1 Drug</p>
+                  <p className="text-[10px] text-red-400/70 leading-tight">Requires Doctor/Patient details during POS billing</p>
+                </div>
+              </label>
+
               <input type="text" placeholder="Composition / Salt (e.g. Paracetamol 500mg) — optional"
                 className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
                 value={newItem.composition} onChange={e => setNewItem({ ...newItem, composition: e.target.value })}
@@ -2244,6 +2260,18 @@ export default function InventoryPage() {
                   {Object.keys(CATEGORY_PACKAGING).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
+
+              {/* Schedule H/H1 Checkbox */}
+              <label className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl cursor-pointer hover:bg-red-500/20 transition-colors">
+                <input type="checkbox" className="w-5 h-5 accent-red-500"
+                  checked={(editItem as any).is_h1 || false}
+                  onChange={e => setEditItem({ ...editItem, is_h1: e.target.checked } as any)}
+                />
+                <div>
+                  <p className="text-sm font-bold text-red-400">Schedule H / H1 Drug</p>
+                  <p className="text-[10px] text-red-400/70 leading-tight">Requires Doctor/Patient details during POS billing</p>
+                </div>
+              </label>
 
               {/* 🔑 HSN Code */}
               <div>
