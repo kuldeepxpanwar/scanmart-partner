@@ -114,18 +114,27 @@ export default function SalesPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  useEffect(() => {
-    setDraftInvoiceNo(generateInvoiceNumber());
-  }, []);
-
-  const generateInvoiceNumber = () => {
-    const date = new Date();
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    const seq = String(Math.floor(Math.random() * 900000) + 100000);
-    return `INV-${y}${m}${d}-${seq}`;
+  const getNextDailySequence = (storeId: string | null) => {
+    if (!storeId) return "1";
+    const todayStr = new Date().toISOString().split('T')[0];
+    const localSeqKey = `daily_bill_seq_${storeId}_${todayStr}`;
+    const localSeq = Number(localStorage.getItem(localSeqKey) || "0");
+    return (localSeq + 1).toString();
   };
+
+  const incrementDailySequence = (storeId: string | null) => {
+    if (!storeId) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const localSeqKey = `daily_bill_seq_${storeId}_${todayStr}`;
+    const localSeq = Number(localStorage.getItem(localSeqKey) || "0");
+    localStorage.setItem(localSeqKey, (localSeq + 1).toString());
+  };
+
+  useEffect(() => {
+    if (activeStoreId) {
+      setDraftInvoiceNo(getNextDailySequence(activeStoreId));
+    }
+  }, [activeStoreId]);
 
   const [pinAttempts, setPinAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
@@ -394,7 +403,7 @@ export default function SalesPage() {
 
     setCheckoutLoading(true);
 
-    const invoiceNumber = draftInvoiceNo || generateInvoiceNumber();
+    const invoiceNumber = draftInvoiceNo || getNextDailySequence(activeStoreId);
     const offlineId = `offline_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
     // ── Calculate profit + GST ─────────────────────────────────
@@ -476,7 +485,8 @@ export default function SalesPage() {
         setShowReceipt(true); clearCart(); resetCustomerState();
         setSplitCash(0); setSplitUpi(0);
         setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
-        setDraftInvoiceNo(generateInvoiceNumber()); // Prepare next bill
+        incrementDailySequence(activeStoreId);
+        setDraftInvoiceNo(getNextDailySequence(activeStoreId)); // Prepare next bill
       } catch (err: any) {
         alert("❌ Offline save failed: " + err.message);
       } finally {
@@ -550,7 +560,8 @@ export default function SalesPage() {
       setShowReceipt(true); clearCart(); resetCustomerState();
       setSplitCash(0); setSplitUpi(0); 
       setH1Details({ doctorName: "", clinicName: "", patientDetails: "" });
-      setDraftInvoiceNo(generateInvoiceNumber()); // Prepare next bill
+      incrementDailySequence(activeStoreId);
+      setDraftInvoiceNo(getNextDailySequence(activeStoreId)); // Prepare next bill
       fetchProducts();
     } catch (err: any) { alert("Error: " + err.message); } finally { setCheckoutLoading(false); }
   };
