@@ -5,7 +5,7 @@ import { Search, Trash2, CreditCard, Loader2, Phone, Banknote, QrCode, Printer, 
 
 // --- MODULAR IMPORTS ---
 import { useCart } from "@/hooks/useCart";
-import POSNumpad from "@/components/pos/POSNumpad";
+// POSNumpad removed
 import POSCartTable from "@/components/pos/POSCartTable";
 import POSReceipt from "@/components/pos/POSReceipt";
 import BarcodeScanner from "@/components/BarcodeScanner";
@@ -547,9 +547,7 @@ export default function SalesPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [products, currentStaff, addToCart]);
-
-  const [numpadTarget, setNumpadTarget] = useState<'mobile' | 'discount' | 'gstin' | null>(null);
-
+  // Numpad removed
   if (!currentStaff) {
     return (
       <div className="h-screen bg-[#0a0f1e] flex items-center justify-center text-white">
@@ -612,6 +610,32 @@ export default function SalesPage() {
         </div>
       </div>
 
+      {/* --- METADATA HEADER BAR --- */}
+      <div className="bg-white border-b border-gray-300 px-4 py-1.5 flex items-center gap-4 text-[10px] shadow-sm z-20 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-1">
+           <div className="flex items-center border border-gray-300 rounded focus-within:border-blue-500 overflow-hidden bg-gray-50">
+             <div className="bg-gray-200 px-2 py-1.5"><Phone size={12} className="text-gray-600" /></div>
+             <input type="text" placeholder="Patient Mobile" className="outline-none py-1.5 px-2 w-28 text-gray-800 font-bold bg-transparent text-xs" 
+                value={phone} onChange={e => handlePhoneSearch(e.target.value)} maxLength={10} />
+           </div>
+           <input type="text" placeholder="Patient Name" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-40 font-bold text-gray-800 text-xs" 
+              value={name} onChange={e => setName(e.target.value)} />
+           {isExisting && <span className="bg-green-100 text-green-700 font-black px-2 py-1 rounded border border-green-200">VIP (₹{totalSpent})</span>}
+           
+           <div className="h-6 w-px bg-gray-300 mx-2"></div>
+           
+           <input type="text" placeholder="GSTIN (B2B)" className="border border-gray-300 rounded px-3 py-1.5 outline-none focus:border-blue-500 w-36 uppercase text-gray-800 text-xs font-bold" 
+              value={customerGstin} onChange={e => setCustomerGstin(e.target.value.toUpperCase())} maxLength={15} />
+
+           {doctorsList.length > 0 && (
+              <select value={referringDoctor} onChange={e => setReferringDoctor(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 outline-none font-bold text-purple-700 cursor-pointer bg-purple-50 focus:border-purple-500 text-xs">
+                 <option value="">-- No DR. Referral --</option>
+                 {doctorsList.map((doc, i) => <option key={i} value={doc.name}>Dr. {doc.name}</option>)}
+              </select>
+           )}
+        </div>
+      </div>
+
       <div className="flex flex-1 overflow-hidden relative">
         {/* Sidebar Collapse Toggle Button */}
         <button
@@ -658,32 +682,12 @@ export default function SalesPage() {
             changeCartItemUnit={changeCartItemUnit}
           />
 
-          {/* ⚡ Quick Products Grid — cart empty hone par dikhao */}
+          {/* Empty Cart State */}
           {cart.length === 0 && !searchTerm && (
-            <div className="flex-1 overflow-y-auto p-3">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <Zap size={10} className="text-yellow-500" /> {t('quick_add')}
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {products.filter(p => p.stock > 0).slice(0, 12).map(p => {
-                  const ss = Number(p.strip_size) || 1;
-                  const stockLabel = ss > 1
-                    ? `${Math.floor(p.stock / ss)}s+${p.stock % ss}t`
-                    : `${p.stock}`;
-                  return (
-                  <button
-                    key={p.id}
-                    onClick={() => addToCart(p)}
-                    className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-xl p-2 text-left transition-all active:scale-95 group"
-                  >
-                    <p className="text-[10px] font-black text-gray-800 truncate group-hover:text-blue-700 leading-tight">{p.name}</p>
-                    <p className="text-[11px] font-black text-blue-600 mt-1">₹{p.price}</p>
-                    <p className="text-[8px] text-gray-400">Stock: {stockLabel}</p>
-                    {p.location && <p className="text-[8px] text-blue-500 mt-0.5 font-bold">📍 {p.location}</p>}
-                  </button>
-                  );
-                })}
-              </div>
+            <div className="flex-1 flex flex-col items-center justify-center opacity-30 select-none">
+              <Book size={64} className="text-gray-400 mb-4" />
+              <p className="text-2xl font-black text-gray-400 tracking-widest uppercase">Start Scanning</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-2">or search product by name / batch</p>
             </div>
           )}
           {/* BUG 4 FIX: Dropdown ab search bar ke relative position mein dikhtaa hai */}
@@ -743,59 +747,18 @@ export default function SalesPage() {
           </div>
         </div>
 
-        <div className={`flex flex-col bg-[#f8fafc] border-l border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'flex-1' : 'w-[42%]'}`}>
-          <div className="p-3 bg-white border-b border-gray-200">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t('mobile_number')}:</p>
-            <div
-              className={`flex items-center border-2 rounded-lg px-3 py-2 cursor-text transition-all ${numpadTarget === 'mobile' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white'}`}
-              onClick={() => setNumpadTarget('mobile')}
-            >
-              <Phone size={14} className="text-gray-400 mr-2 flex-shrink-0" />
-              <span className="font-black text-gray-800 text-lg tracking-widest flex-1">{phone || <span className="text-gray-300 font-normal text-sm">{t('tap_numpad')}</span>}</span>
-              {isExisting && <span className="text-[9px] bg-green-100 text-green-600 font-black px-1.5 py-0.5 rounded">VIP ❤</span>}
-            </div>
-            {isExisting && name && <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">● {name} — Spent ₹{totalSpent.toLocaleString()}</p>}
-            <div className={`mt-2 flex items-center border-2 rounded-lg px-3 py-1.5 cursor-text transition-all ${numpadTarget === 'gstin' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}
-              onClick={() => setNumpadTarget('gstin')}
-            >
-              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest w-12 flex-shrink-0">GSTIN</span>
-              <input 
-                type="text" 
-                value={customerGstin} 
-                onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
-                className="w-full bg-transparent text-xs font-black text-gray-700 outline-none uppercase placeholder:text-gray-300 placeholder:font-normal" 
-                placeholder="Optional for B2B" 
-                maxLength={15}
-              />
-            </div>
-            {doctorsList.length > 0 && (
-              <div className="mt-2 flex items-center border border-gray-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-purple-400 transition-all">
-                <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest w-12 flex-shrink-0">DR.</span>
-                <select
-                  value={referringDoctor}
-                  onChange={(e) => setReferringDoctor(e.target.value)}
-                  className="w-full bg-transparent text-xs font-black text-purple-700 outline-none uppercase cursor-pointer"
-                >
-                  <option value="">-- No Referral --</option>
-                  {doctorsList.map((doc, i) => (
-                    <option key={i} value={doc.name}>{doc.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
+        <div className={`flex flex-col bg-[#f8fafc] border-l border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'flex-1' : 'w-[28%]'}`}>
           {heldBills.length > 0 && (
-            <div className="px-3 pt-2">
-              <button onClick={() => setShowHeldBills(!showHeldBills)} className="w-full bg-amber-50 border border-amber-300 text-amber-700 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1">
-                <RotateCcw size={11} /> {heldBills.length} Held Bill(s) — Tap to Recall
+            <div className="px-3 pt-3">
+              <button onClick={() => setShowHeldBills(!showHeldBills)} className="w-full bg-amber-50 border border-amber-300 text-amber-700 py-2 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1">
+                <RotateCcw size={14} /> {heldBills.length} Held Bill(s)
               </button>
               {showHeldBills && (
-                <div className="bg-white border border-amber-200 rounded-lg mt-1 overflow-hidden">
+                <div className="bg-white border border-amber-200 rounded-lg mt-1 overflow-hidden shadow-sm">
                   {heldBills.map((bill, i) => (
-                    <div key={i} className="flex items-center px-2 py-1.5 border-b border-gray-100 gap-2">
-                      <button onClick={() => recallBill(bill)} className="flex-1 text-left text-[10px] font-bold text-gray-700 hover:text-blue-600">{bill.label}</button>
-                      <button onClick={() => removeHeldBill(bill.label)} className="text-red-400"><X size={12} /></button>
+                    <div key={i} className="flex items-center px-2 py-2 border-b border-gray-100 gap-2">
+                      <button onClick={() => recallBill(bill)} className="flex-1 text-left text-xs font-bold text-gray-700 hover:text-blue-600">{bill.label}</button>
+                      <button onClick={() => removeHeldBill(bill.label)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
                     </div>
                   ))}
                 </div>
@@ -803,35 +766,21 @@ export default function SalesPage() {
             </div>
           )}
 
-          <div className="px-3 py-2 bg-white border-b border-gray-200 flex items-center gap-2">
-            <p className="text-[9px] font-black text-gray-400 uppercase">{t('discount')}:</p>
+          <div className="px-3 py-3 mt-2 bg-white border-y border-gray-200 flex items-center gap-2">
+            <p className="text-[10px] font-black text-gray-500 uppercase flex-shrink-0">{t('discount')}:</p>
             <button
               onClick={() => setDiscountType(t => t === 'percent' ? 'flat' : 'percent')}
-              className="bg-blue-600 text-white text-[10px] font-black px-2 py-1 rounded transition-all"
+              className="bg-blue-600 text-white text-xs font-black px-2 py-1.5 rounded transition-all w-8 text-center"
             >{discountType === 'percent' ? '%' : '₹'}</button>
-            <div
-              className={`flex-1 border-2 rounded px-2 py-1 text-sm font-black text-center cursor-text transition-all ${numpadTarget === 'discount' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-700'}`}
-              onClick={() => setNumpadTarget('discount')}
-            >
-              {discountValue > 0 ? discountValue : <span className="text-gray-300 font-normal text-xs">0</span>}
-            </div>
-            {discountAmount > 0 && <span className="text-green-600 text-[10px] font-black">-₹{discountAmount.toFixed(0)}</span>}
-          </div>
-
-          <POSNumpad
-            numpadTarget={numpadTarget}
-            phone={phone}
-            setPhone={setPhone}
-            discountValue={discountValue}
-            setDiscountValue={setDiscountValue}
-            handlePhoneSearch={handlePhoneSearch}
-            setIsExisting={setIsExisting}
-            setName={setName}
-          />
-
-          <div className="flex gap-2 px-3 pb-2">
-            <button onClick={() => setNumpadTarget('mobile')} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border-2 transition-all ${numpadTarget === 'mobile' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>📱 Mobile</button>
-            <button onClick={() => setNumpadTarget('discount')} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border-2 transition-all ${numpadTarget === 'discount' ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-400'}`}>🏷️ Discount</button>
+            <input
+              type="number"
+              min="0"
+              value={discountValue || ''}
+              onChange={(e) => setDiscountValue(Number(e.target.value))}
+              className="flex-1 border-2 border-gray-200 rounded px-3 py-1.5 text-sm font-black text-center focus:border-blue-500 outline-none text-gray-800"
+              placeholder="0"
+            />
+            {discountAmount > 0 && <span className="text-green-600 text-xs font-black">-₹{discountAmount.toFixed(0)}</span>}
           </div>
 
           <div className="px-3 pb-2">
