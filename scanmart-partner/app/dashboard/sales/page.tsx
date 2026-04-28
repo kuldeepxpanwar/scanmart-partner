@@ -56,6 +56,8 @@ export default function SalesPage() {
   const [isExisting, setIsExisting] = useState(false);
   const [customerGstin, setCustomerGstin] = useState("");
   const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal');
+  const [referringDoctor, setReferringDoctor] = useState("");
+  const [doctorsList, setDoctorsList] = useState<any[]>([]);
 
   // --- CUSTOM HOOK FOR CART ---
   const {
@@ -143,8 +145,15 @@ export default function SalesPage() {
     if (activeStoreId) {
       fetchProducts();
       fetchSettings();
+      fetchDoctors();
     }
   }, [activeStoreId]);
+
+  const fetchDoctors = async () => {
+    if (!activeStoreId) return;
+    const { data } = await supabase.from("doctors").select("name").eq("store_id", activeStoreId);
+    if (data) setDoctorsList(data);
+  };
 
   const fetchFirstStore = async () => {
     const { data } = await supabase.from("stores").select("id").limit(1);
@@ -317,7 +326,7 @@ export default function SalesPage() {
     setLoginLoading(false);
   };
 
-  const resetCustomerState = () => { resetCustomer(); setTotalSpent(0); setIsExisting(false); setCustomerGstin(""); };
+  const resetCustomerState = () => { resetCustomer(); setTotalSpent(0); setIsExisting(false); setCustomerGstin(""); setReferringDoctor(""); };
   const handleLogout = () => { setCurrentStaff(null); clearCart(); resetCustomerState(); };
 
   useEffect(() => {
@@ -378,7 +387,7 @@ export default function SalesPage() {
       staff_id: currentStaff?.id,
       store_id: activeStoreId,
       created_at: new Date().toISOString(),
-      doctor_name: hasH1 ? h1Details.doctorName : null,
+      doctor_name: hasH1 && h1Details.doctorName ? h1Details.doctorName : (referringDoctor || null),
       clinic_name: hasH1 ? h1Details.clinicName : null,
       patient_details: hasH1 ? h1Details.patientDetails : null,
     };
@@ -759,6 +768,21 @@ export default function SalesPage() {
                 maxLength={15}
               />
             </div>
+            {doctorsList.length > 0 && (
+              <div className="mt-2 flex items-center border border-gray-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-purple-400 transition-all">
+                <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest w-12 flex-shrink-0">DR.</span>
+                <select
+                  value={referringDoctor}
+                  onChange={(e) => setReferringDoctor(e.target.value)}
+                  className="w-full bg-transparent text-xs font-black text-purple-700 outline-none uppercase cursor-pointer"
+                >
+                  <option value="">-- No Referral --</option>
+                  {doctorsList.map((doc, i) => (
+                    <option key={i} value={doc.name}>{doc.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {heldBills.length > 0 && (
