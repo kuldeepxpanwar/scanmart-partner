@@ -1427,7 +1427,7 @@ export default function InventoryPage() {
                       <td className="p-5 font-mono">
                         {item.mrp > item.price && <div className="text-[10px] text-slate-500 line-through">MRP: ₹{item.mrp}</div>}
                         <div className="text-white font-bold text-sm">Sale: ₹{item.price}</div>
-                        {!showArchived && <div className="text-[10px] text-green-500 font-bold">+₹{margin} Profit</div>}
+                        {!showArchived && <div className="text-[10px] text-green-500 font-bold">{margin >= 0 ? '+' : ''}₹{margin.toFixed(2)} Profit</div>}
                       </td>
                       <td className="p-5">
                         {(() => {
