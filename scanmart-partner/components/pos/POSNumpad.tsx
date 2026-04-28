@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 
 interface POSNumpadProps {
-    numpadTarget: 'mobile' | 'discount' | null;
+    numpadTarget: 'mobile' | 'discount' | 'gstin' | null;
     phone: string;
     setPhone: (val: string) => void;
     discountValue: number;
