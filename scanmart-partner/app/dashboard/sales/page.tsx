@@ -58,13 +58,15 @@ export default function SalesPage() {
   const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal');
   const [referringDoctor, setReferringDoctor] = useState("");
   const [doctorsList, setDoctorsList] = useState<any[]>([]);
+  const [isTbPatient, setIsTbPatient] = useState(false);
+  const [rateProfile, setRateProfile] = useState<'retail' | 'wholesale'>('retail');
 
   // --- CUSTOM HOOK FOR CART ---
   const {
     cart, addToCart, updateQuantity, removeFromCart, clearCart, toggleMute,
     changeCartItemUnit, getTabletsPerUnit,
     discountValue, setDiscountValue, discountType, setDiscountType,
-    subTotal, totalSavings, finalTotal, discountAmount,
+    subTotal, grossSubTotal, totalSavings, finalTotal, discountAmount,
     phone, setPhone, name, setName, totalSpent, setTotalSpent,
     heldBills, holdCurrentBill, recallBill, removeHeldBill, resetCustomer
   } = useCart(products);
@@ -633,6 +635,22 @@ export default function SalesPage() {
                  {doctorsList.map((doc, i) => <option key={i} value={doc.name}>Dr. {doc.name}</option>)}
               </select>
            )}
+
+           <div className="h-6 w-px bg-gray-300 mx-2"></div>
+
+           <label className="flex items-center gap-1.5 cursor-pointer bg-red-50 text-red-700 px-2 py-1.5 rounded border border-red-200 hover:bg-red-100 transition-colors">
+             <input type="checkbox" checked={isTbPatient} onChange={e => setIsTbPatient(e.target.checked)} className="accent-red-600 w-3 h-3 cursor-pointer" />
+             <span className="font-bold uppercase tracking-widest text-[9px]">TB (H1)</span>
+           </label>
+
+           <select value={rateProfile} onChange={e => setRateProfile(e.target.value as any)} className="border border-gray-300 rounded px-2 py-1.5 outline-none font-bold text-gray-700 cursor-pointer bg-gray-50 text-[10px] uppercase">
+             <option value="retail">Retail</option>
+             <option value="wholesale">Wholesale</option>
+           </select>
+
+           <button className="ml-auto bg-[#25D366] hover:bg-[#128C7E] text-white px-3 py-1.5 rounded font-bold flex items-center gap-1.5 transition-colors shadow-sm">
+              <Phone size={12} /> <span className="uppercase text-[9px] tracking-widest">WhatsApp</span>
+           </button>
         </div>
       </div>
 
@@ -783,7 +801,24 @@ export default function SalesPage() {
             {discountAmount > 0 && <span className="text-green-600 text-xs font-black">-₹{discountAmount.toFixed(0)}</span>}
           </div>
 
-          <div className="px-3 pb-2">
+          <div className="px-4 py-3 bg-[#f8fafc] border-b border-gray-200 space-y-1">
+             <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                <span>Gross Total</span>
+                <span>₹{grossSubTotal.toFixed(2)}</span>
+             </div>
+             {grossSubTotal > subTotal && (
+                 <div className="flex justify-between text-[10px] font-bold text-red-400 uppercase">
+                    <span>Muted / Removed</span>
+                    <span>-₹{(grossSubTotal - subTotal).toFixed(2)}</span>
+                 </div>
+             )}
+             <div className="flex justify-between text-[11px] font-black text-blue-900 uppercase pt-1 border-t border-gray-200 mt-1">
+                <span>Selected Subtotal</span>
+                <span>₹{subTotal.toFixed(2)}</span>
+             </div>
+          </div>
+
+          <div className="px-3 pb-2 pt-2">
             <div className="grid grid-cols-5 gap-1.5 mb-2">
               {(['cash', 'upi', 'card', 'split', 'udhaar'] as const).map(m => (
                 <button

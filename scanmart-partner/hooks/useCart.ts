@@ -150,12 +150,19 @@ export function useCart(products: any[]) {
     // --- CALCULATIONS ---
     const calculateTotals = () => {
         let subTotal = 0;
+        let grossSubTotal = 0;
         let totalSavings = 0;
 
         cart.forEach(item => {
-            if (item.is_muted) return;
             const price = Number(item.price || 0);
             const mrp = Number(item.mrp || price);
+            
+            // Always add to gross total
+            grossSubTotal += price * item.quantity;
+            
+            if (item.is_muted) return;
+            
+            // Only add to selected subTotal if not muted
             subTotal += price * item.quantity;
             if (mrp > price) {
                 totalSavings += (mrp - price) * item.quantity;
@@ -171,10 +178,10 @@ export function useCart(products: any[]) {
         }
 
         const finalTotal = Math.max(0, subTotal - discountAmount);
-        return { subTotal, totalSavings, finalTotal, discountAmount };
+        return { subTotal, grossSubTotal, totalSavings, finalTotal, discountAmount };
     };
 
-    const { subTotal, totalSavings, finalTotal, discountAmount } = calculateTotals();
+    const { subTotal, grossSubTotal, totalSavings, finalTotal, discountAmount } = calculateTotals();
 
     // --- HOLD BILLS LOGIC ---
     const holdCurrentBill = () => {
@@ -216,6 +223,7 @@ export function useCart(products: any[]) {
         discountType,
         setDiscountType,
         subTotal,
+        grossSubTotal,
         totalSavings,
         finalTotal,
         discountAmount,
