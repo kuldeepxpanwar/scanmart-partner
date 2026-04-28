@@ -26,7 +26,9 @@ import {
   Calendar,
   Truck,
   PackagePlus,
-  ShieldAlert
+  ShieldAlert,
+  X,
+  Receipt
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
