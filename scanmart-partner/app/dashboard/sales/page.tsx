@@ -227,7 +227,7 @@ export default function SalesPage() {
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("*, batches(batch_number, expiry_date, quantity)")
+      .select("*, inventory_batches(batch_number, expiry_date, quantity)")
       .eq("store_id", activeStoreId)
       .eq('is_active', true);
 
@@ -236,8 +236,8 @@ export default function SalesPage() {
       // FEFO (First Expiry First Out) extraction
       const processedData = data.map((item: any) => {
          let activeBatch = null;
-         if (item.batches && Array.isArray(item.batches)) {
-             const validBatches = item.batches.filter((b: any) => b.quantity > 0);
+         if (item.inventory_batches && Array.isArray(item.inventory_batches)) {
+             const validBatches = item.inventory_batches.filter((b: any) => b.quantity > 0);
              if (validBatches.length > 0) {
                  validBatches.sort((a: any, b: any) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
                  activeBatch = validBatches[0];
