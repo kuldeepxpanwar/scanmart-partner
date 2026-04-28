@@ -61,7 +61,7 @@ export default function SalesPage() {
 
   // --- CUSTOM HOOK FOR CART ---
   const {
-    cart, addToCart, updateQuantity, removeFromCart, clearCart,
+    cart, addToCart, updateQuantity, removeFromCart, clearCart, toggleMute,
     changeCartItemUnit, getTabletsPerUnit,
     discountValue, setDiscountValue, discountType, setDiscountType,
     subTotal, totalSavings, finalTotal, discountAmount,
@@ -679,6 +679,7 @@ export default function SalesPage() {
             updateQuantity={updateQuantity}
             removeFromCart={removeFromCart}
             changeCartItemUnit={changeCartItemUnit}
+            toggleMute={toggleMute}
           />
 
           {/* Empty Cart State */}

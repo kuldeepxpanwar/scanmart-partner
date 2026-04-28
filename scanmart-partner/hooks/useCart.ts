@@ -12,6 +12,7 @@ export interface CartItem {
     barcode?: string;
     buying_price?: number;
     gst_rate?: number;
+    is_muted?: boolean;
     // 💊 Multi-unit fields
     pack_size: number;    // strips per box
     strip_size: number;   // tablets per strip
@@ -135,6 +136,10 @@ export function useCart(products: any[]) {
         setDiscountValue(0);
     };
 
+    const toggleMute = (id: string) => {
+        setCart((prev) => prev.map(item => item.id === id ? { ...item, is_muted: !item.is_muted } : item));
+    };
+
     const resetCustomer = () => {
         setPhone("");
         setName("");
@@ -147,6 +152,7 @@ export function useCart(products: any[]) {
         let totalSavings = 0;
 
         cart.forEach(item => {
+            if (item.is_muted) return;
             const price = Number(item.price || 0);
             const mrp = Number(item.mrp || price);
             subTotal += price * item.quantity;
@@ -201,6 +207,7 @@ export function useCart(products: any[]) {
         updateQuantity,
         removeFromCart,
         clearCart,
+        toggleMute,
         changeCartItemUnit,
         getTabletsPerUnit,
         discountValue,
