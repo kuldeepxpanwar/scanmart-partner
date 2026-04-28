@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase";
 import {
   LayoutDashboard, Package, BarChart3, Users, Settings,
   Truck, LogOut, Zap, ShoppingCart, ScanBarcode, Shield,
-  RefreshCcw, RotateCcw, FileText, Sparkles, ChevronRight, ChevronLeft, Menu
+  RefreshCcw, RotateCcw, FileText, Sparkles, ChevronRight, ChevronLeft, Menu,
+  ClipboardCheck
 } from "lucide-react";
 import { useApp } from "@/lib/AppContext";
 import AppSwitcher from "@/components/AppSwitcher";
@@ -74,6 +75,7 @@ export default function Sidebar() {
     { label: t('pos_terminal'), icon: <ShoppingCart size={20} />, href: "/dashboard/sales", roles: ["admin", "manager", "staff"] },
     { label: "Returns", icon: <RotateCcw size={20} />, href: "/dashboard/returns", roles: ["admin", "manager", "staff"] },
     { label: t('inventory'), icon: <Package size={20} />, href: "/dashboard/inventory", roles: ["admin", "manager"] },
+    { label: "GRN Audit", icon: <ClipboardCheck size={20} />, href: "/dashboard/grn", roles: ["admin", "manager"] },
     { label: t('supplier'), icon: <Truck size={20} />, href: "/dashboard/suppliers", roles: ["admin", "manager"] },
     { label: t('analytics'), icon: <BarChart3 size={20} />, href: "/dashboard/analytics", roles: ["admin", "manager"] },
     { label: t('customer'), icon: <Users size={20} />, href: "/dashboard/customers", roles: ["admin", "manager"] },

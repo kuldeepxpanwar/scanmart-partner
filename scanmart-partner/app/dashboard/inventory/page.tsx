@@ -2186,10 +2186,29 @@ export default function InventoryPage() {
           <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
             <h2 className="text-2xl font-bold mb-6 italic text-yellow-500">Edit <span className="text-white">Product</span></h2>
             <div className="space-y-4">
-              <input type="text" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.name || ""} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })} />
+              <input type="text" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none font-bold" value={editItem.name || ""} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })} />
               <div className="relative">
                 <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                 <input type="text" placeholder="Barcode" className="w-full bg-slate-800 p-3 pl-10 rounded-xl border border-slate-700 outline-none font-mono" value={editItem.barcode || ""} onChange={(e) => setEditItem({ ...editItem, barcode: e.target.value })} />
+              </div>
+
+              {/* Category — with auto pack defaults */}
+              <div>
+                <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 block">Category</label>
+                <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer"
+                  value={editItem.category || 'General'}
+                  onChange={e => {
+                    const cat = e.target.value;
+                    const d = CATEGORY_PACKAGING[cat] || CATEGORY_PACKAGING['General'];
+                    setEditItem({
+                      ...editItem, category: cat,
+                      pack_size: editItem.pack_size || String(d.pack_size),
+                      strip_size: editItem.strip_size || String(d.strip_size),
+                      sell_unit: editItem.sell_unit || d.sell_unit,
+                    });
+                  }}>
+                  {Object.keys(CATEGORY_PACKAGING).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
 
               {/* 🔑 HSN Code */}
@@ -2222,35 +2241,86 @@ export default function InventoryPage() {
                 className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
                 value={editItem.composition || ""} onChange={e => setEditItem({ ...editItem, composition: e.target.value })}/>
               {/* Pack Structure in Edit */}
-              <div className="bg-purple-900/15 border border-purple-500/20 rounded-xl p-3">
-                <p className="text-[10px] font-black uppercase text-purple-400 mb-2">📦 Pack Structure</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Strips/Box</label>
-                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-300 font-bold text-center outline-none"
+              <div className="bg-purple-900/15 border border-purple-500/20 rounded-xl p-4 space-y-3">
+                <p className="text-[10px] font-black uppercase text-purple-400">📦 Pack Structure</p>
+
+                {/* Strips/Box × Tabs/Strip = per box */}
+                <div className="flex items-end gap-2 bg-slate-950/50 rounded-xl p-3">
+                  <div className="flex-1 text-center">
+                    <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Strips/Box</p>
+                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/40 text-purple-300 font-black text-center text-xl outline-none focus:border-purple-500"
                       value={editItem.pack_size || 1} onChange={e => setEditItem({ ...editItem, pack_size: e.target.value })}/>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Tabs/Strip</label>
-                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-300 font-bold text-center outline-none"
+                  <span className="text-slate-500 font-black text-2xl mb-2">×</span>
+                  <div className="flex-1 text-center">
+                    <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Tabs/Strip</p>
+                    <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/40 text-purple-300 font-black text-center text-xl outline-none focus:border-purple-500"
                       value={editItem.strip_size || 1} onChange={e => setEditItem({ ...editItem, strip_size: e.target.value })}/>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Sell As</label>
-                    <select className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none text-white cursor-pointer"
-                      value={editItem.sell_unit || 'strip'} onChange={e => setEditItem({ ...editItem, sell_unit: e.target.value })}>
-                      <option value="tablet">💊 Tablet</option>
-                      <option value="strip">📋 Strip</option>
-                      <option value="piece">📦 Piece</option>
-                    </select>
+                  <span className="text-slate-500 font-black text-2xl mb-2">=</span>
+                  <div className="flex-1 text-center bg-purple-500/10 rounded-lg p-2">
+                    <p className="text-[9px] text-purple-400 uppercase font-bold">per box</p>
+                    <p className="text-purple-300 font-black text-2xl">{(Number(editItem.pack_size)||1)*(Number(editItem.strip_size)||1)}</p>
                   </div>
                 </div>
-                {editItem.strip_size > 1 && editItem.mrp > 0 && (
-                  <p className="text-[10px] text-green-400 font-bold mt-2">
-                    ℹ️ Per tablet: ₹{(Number(editItem.mrp)/Number(editItem.strip_size)).toFixed(2)} · Stock: {editItem.stock} tabs = {Math.floor(editItem.stock/editItem.strip_size)} strips + {editItem.stock%editItem.strip_size} loose
+
+                {/* Sell As */}
+                <div className="flex gap-1">
+                  {(['tablet','strip','piece'] as const).map(v => (
+                    <button key={v} type="button" onClick={() => setEditItem({ ...editItem, sell_unit: v })}
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${(editItem.sell_unit||'strip') === v ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                      {v === 'tablet' ? '💊 Tablet' : v === 'strip' ? '📋 Strip' : '📦 Piece'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 3-way Stock Entry */}
+                <p className="text-[9px] font-bold uppercase text-slate-500">Adjust Stock — fill any one (overrides current):</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Boxes</label>
+                    <input type="number" min="0" placeholder="–"
+                      className="w-full bg-slate-800 p-2.5 rounded-lg border border-orange-500/30 text-orange-300 font-bold text-center outline-none"
+                      value={(editItem as any)._stock_boxes || ''}
+                      onChange={e => {
+                        const b = Number(e.target.value)||0;
+                        const total = b*(Number(editItem.pack_size)||1)*(Number(editItem.strip_size)||1);
+                        setEditItem({ ...editItem, stock: total, _stock_boxes: e.target.value, _stock_strips: '' } as any);
+                      }}/>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-yellow-400 uppercase block mb-1">Strips</label>
+                    <input type="number" min="0" placeholder="–"
+                      className="w-full bg-slate-800 p-2.5 rounded-lg border border-yellow-500/30 text-yellow-300 font-bold text-center outline-none"
+                      value={(editItem as any)._stock_strips || ''}
+                      onChange={e => {
+                        const s = Number(e.target.value)||0;
+                        const total = s*(Number(editItem.strip_size)||1);
+                        setEditItem({ ...editItem, stock: total, _stock_strips: e.target.value, _stock_boxes: '' } as any);
+                      }}/>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-green-400 uppercase block mb-1">Tablets</label>
+                    <input type="number" min="0" placeholder="–"
+                      className="w-full bg-slate-800 p-2.5 rounded-lg border border-green-500/30 text-green-300 font-bold text-center outline-none"
+                      value={editItem.stock || ''}
+                      onChange={e => setEditItem({ ...editItem, stock: e.target.value, _stock_boxes: '', _stock_strips: '' } as any)}/>
+                  </div>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg px-3 py-2 flex justify-between items-center">
+                  <span className="text-[10px] text-slate-400 font-bold">Current Total:</span>
+                  <span className="text-green-400 font-black text-sm">
+                    {Number(editItem.stock)||0} tablets
+                    {Number(editItem.strip_size) > 1 && ` = ${Math.floor((Number(editItem.stock)||0)/Number(editItem.strip_size))} strips + ${(Number(editItem.stock)||0)%Number(editItem.strip_size)} loose`}
+                  </span>
+                </div>
+                {Number(editItem.strip_size) > 1 && Number(editItem.mrp) > 0 && (
+                  <p className="text-[10px] text-blue-400 font-bold">
+                    Per tablet: ₹{(Number(editItem.mrp)/Number(editItem.strip_size)).toFixed(2)}
                   </p>
                 )}
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
                 <input type="number" placeholder="Offer Price" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none" value={editItem.price || ""} onChange={(e) => setEditItem({ ...editItem, price: e.target.value })} />
@@ -2261,12 +2331,11 @@ export default function InventoryPage() {
                   {GST_SLABS.map(slab => <option key={slab.value} value={slab.value}>{slab.label}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input type="number" placeholder="Stock" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.stock || ""} onChange={(e) => setEditItem({ ...editItem, stock: e.target.value })} />
-
-                {/* 🔥 Supplier Edit Dropdown */}
+              {/* Supplier */}
+              <div>
+                <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Supplier</label>
                 <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer" value={editItem.supplier_id || ""} onChange={(e) => setEditItem({ ...editItem, supplier_id: e.target.value })}>
-                  <option value="">No Supplier</option>
+                  <option value="">None / Self</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
