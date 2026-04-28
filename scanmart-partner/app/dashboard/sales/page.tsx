@@ -227,15 +227,32 @@ export default function SalesPage() {
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("*, mrp")
+      .select("*, batches(batch_number, expiry_date, quantity)")
       .eq("store_id", activeStoreId)
       .eq('is_active', true);
 
     if (error) console.error("Error fetching products:", error);
     if (data) {
-      setProducts(data);
+      // FEFO (First Expiry First Out) extraction
+      const processedData = data.map((item: any) => {
+         let activeBatch = null;
+         if (item.batches && Array.isArray(item.batches)) {
+             const validBatches = item.batches.filter((b: any) => b.quantity > 0);
+             if (validBatches.length > 0) {
+                 validBatches.sort((a: any, b: any) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+                 activeBatch = validBatches[0];
+             }
+         }
+         return {
+             ...item,
+             batch_no: activeBatch ? activeBatch.batch_number : null,
+             expiry_date: activeBatch ? activeBatch.expiry_date : null
+         };
+      });
+
+      setProducts(processedData);
       // 💾 Cache products for offline use
-      try { localStorage.setItem(`scanmart_products_${activeStoreId}`, JSON.stringify(data)); } catch { /* storage full */ }
+      try { localStorage.setItem(`scanmart_products_${activeStoreId}`, JSON.stringify(processedData)); } catch { /* storage full */ }
     }
   };
 
