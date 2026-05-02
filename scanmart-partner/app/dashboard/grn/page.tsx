@@ -214,19 +214,28 @@ export default function GRNPage() {
           qtyFree = Number(cols[3]?.trim()) || 0;
         }
         
-        const rate = Number(cols[7]?.trim()) || 0;
-        const mrp = Number(cols[6]?.trim()) || 0;
-        const discount = Number(cols[8]?.trim()) || 0; // Assuming Col 8 is Discount
+        const rate = Math.abs(Number((cols[7]?.trim() || "0").replace(/[^0-9.-]/g, '')) || 0);
+        const mrp = Math.abs(Number((cols[6]?.trim() || "0").replace(/[^0-9.-]/g, '')) || 0);
+        const rawDiscount = cols[8]?.trim() || "0";
+        const discount = Math.abs(Number(rawDiscount.replace(/[^0-9.-]/g, '')) || 0); // Assuming Col 8 is Discount
+        
+        let hsn_code = cols[1]?.trim() || "3004";
+        hsn_code = hsn_code.replace(/\.+$/, ''); // Remove trailing dots
+        
+        const cleanSgst = Math.abs(Number((cols[9]?.trim() || "0").replace(/[^0-9.-]/g, '')) || 0);
+        const cleanCgst = Math.abs(Number((cols[10]?.trim() || "0").replace(/[^0-9.-]/g, '')) || 0);
+        const gst_rate = cleanSgst + cleanCgst;
+
         const match = inventoryList.find(p => p.name.toLowerCase() === name.toLowerCase());
         await supabase.from("grn_items").insert({
           grn_id: activeSession.id, store_id: activeStoreId,
           product_name: name, matched_product_id: match?.id || null,
           is_new_product: !match, category: autoCategory(name),
-          hsn_code: cols[1]?.trim() || "3004",
+          hsn_code: hsn_code,
           batch_no: cols[4]?.trim() || "",
           expiry_date: cols[5]?.trim() ? parseExpiry(cols[5].trim()) : null,
           qty, qty_free: qtyFree, mrp, rate, discount,
-          gst_rate: (Number(cols[9]?.trim()) || 0) + (Number(cols[10]?.trim()) || 0),
+          gst_rate: gst_rate,
           status: "pending"
         });
         added++;
@@ -539,6 +548,9 @@ export default function GRNPage() {
                           <p className="text-[9px] text-slate-500">
                             {item.is_new_product ? <span className="text-blue-400 font-bold">NEW</span> : <span className="text-green-400 font-bold">MATCH</span>}
                             {" · "}{item.category} · GST {item.gst_rate}%
+                            {item.hsn_code && /[^\d]/.test(item.hsn_code) && (
+                              <span title={`Invalid HSN: ${item.hsn_code}`} className="ml-2 bg-orange-500/20 text-orange-400 text-[8px] px-1.5 py-0.5 rounded">⚠️ HSN</span>
+                            )}
                           </p>
                         </td>
                         <td className="px-4 py-3">
@@ -550,7 +562,10 @@ export default function GRNPage() {
                           <p className="text-[9px] text-slate-500">{item.qty}+{item.qty_free} free</p>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <p className="font-bold text-white">PTR: ₹{item.rate} {Number(item.discount) > 0 && <span className="text-[9px] text-orange-400 font-bold">(-{item.discount}%)</span>}</p>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {Number(item.discount) <= 0 && <span title="Discount is 0%. Is this correct?" className="bg-red-500/20 text-red-400 font-bold px-1.5 py-0.5 rounded text-[8px] animate-pulse">🚨 CHECK DIS</span>}
+                            <p className="font-bold text-white">PTR: ₹{item.rate} {Number(item.discount) > 0 && <span className="text-[9px] text-orange-400 font-bold">(-{item.discount}%)</span>}</p>
+                          </div>
                           {(() => {
                             const discountedRate = Number(item.rate) * (1 - (Number(item.discount) || 0) / 100);
                             const landed = (Number(item.qty) + Number(item.qty_free)) > 0 ? (Number(item.qty) * discountedRate) / (Number(item.qty) + Number(item.qty_free)) : discountedRate;
