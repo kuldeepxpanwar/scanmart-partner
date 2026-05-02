@@ -43,17 +43,27 @@ export default function StoreSwitcher() {
     if (isOwner && ownerStores) {
       setStores(ownerStores);
       const savedStoreId = typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null;
-      const active = ownerStores.find(s => s.id === savedStoreId) || ownerStores[0];
+      
+      // 🔥 BUG FIX: Verify saved store ID belongs to THIS user's stores
+      const matched = ownerStores.find(s => s.id === savedStoreId);
+      if (!matched && savedStoreId) {
+        // Stale/foreign store ID — clear it immediately to prevent data leaks
+        localStorage.removeItem("active_store_id");
+      }
+      const active = matched || ownerStores[0];
+      
       setCurrentStore(active);
       if (active && typeof window !== 'undefined') {
         localStorage.setItem("active_store_id", active.id);
       }
     } else {
-      // Staff: use their assigned store from localStorage
+      // Staff: verify their assigned store exists before using it
       const savedStoreId = typeof window !== 'undefined' ? localStorage.getItem("active_store_id") : null;
       if (savedStoreId) {
         const { data: myStore } = await supabase.from("stores").select("*").eq("id", savedStoreId).single();
+        // 🔥 BUG FIX: Only use the store if it actually exists in the DB
         if (myStore) { setStores([myStore]); setCurrentStore(myStore); }
+        else { localStorage.removeItem("active_store_id"); } // Clear ghost ID
       }
     }
     setLoading(false);
