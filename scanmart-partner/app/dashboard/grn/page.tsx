@@ -461,20 +461,26 @@ export default function GRNPage() {
               <p className="font-black text-white">{items.length}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Expected Invoice</p>
-              <p className="font-black text-white">₹{Number(activeSession.invoice_amount || 0).toLocaleString()}</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Invoice Amount</p>
+              <p className="font-black text-white">₹{Number(activeSession.invoice_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Calculated Total</p>
-              <p className="font-black text-green-400">₹{items.reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Calc. Base Total</p>
+              <p className="font-black text-blue-400">₹{items.filter(i => i.status !== 'rejected').reduce((s, i) => s + (Number(i.qty) * Number(i.rate)), 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Calc. Net Total</p>
+              <p className="font-black text-green-400">₹{items.filter(i => i.status !== 'rejected').reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
             </div>
             <div>
               <p className="text-[10px] text-slate-500 font-bold uppercase">Difference</p>
               {(() => {
-                const calcTotal = items.reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0);
-                const diff = (activeSession.invoice_amount || 0) - calcTotal;
+                const calcTotal = items.filter(i => i.status !== 'rejected').reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0);
+                const expected = Number(activeSession.invoice_amount || 0);
+                if (expected === 0) return <p className="font-black text-slate-500">N/A</p>;
+                const diff = expected - calcTotal;
                 const isMatch = Math.abs(diff) < 10;
-                return <p className={`font-black ${isMatch ? "text-green-500" : "text-red-500"}`}>{isMatch ? "MATCH" : `${diff > 0 ? "+" : ""}₹${diff.toFixed(2)}`}</p>;
+                return <p className={`font-black ${isMatch ? "text-green-500" : "text-red-500"}`}>{isMatch ? "MATCH ✅" : `${diff > 0 ? "+" : ""}₹${diff.toFixed(2)}`}</p>;
               })()}
             </div>
             <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ${statusBadge(activeSession.status)}`}>{activeSession.status}</span>
