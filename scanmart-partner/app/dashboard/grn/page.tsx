@@ -33,6 +33,7 @@ export default function GRNPage() {
   const [saving, setSaving] = useState(false);
   const [inventoryList, setInventoryList] = useState<any[]>([]);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [editItem, setEditItem] = useState<GRNItem | null>(null);
 
   // New Session Form
   const [form, setForm] = useState({ supplier_name: "", invoice_no: "", invoice_date: "", notes: "" });
@@ -177,7 +178,7 @@ export default function GRNPage() {
       review_note: item.review_note
     }).eq("id", item.id);
     if (error) toast.error(error.message);
-    else { setItems(prev => prev.map(i => i.id === item.id ? item : i)); setExpandedItem(null); toast.success("Item updated!"); }
+    else { setItems(prev => prev.map(i => i.id === item.id ? item : i)); setExpandedItem(null); setEditItem(null); toast.success("Item updated!"); }
   };
 
   const handleDeleteItem = async (id: string) => {
@@ -480,7 +481,8 @@ export default function GRNPage() {
                   </thead>
                   <tbody>
                     {items.map(item => (
-                      <tr key={item.id} className={`border-b border-slate-800/50 hover:bg-slate-800/20 ${item.status === "rejected" ? "opacity-40" : ""}`}>
+                      <React.Fragment key={item.id}>
+                      <tr className={`border-b border-slate-800/50 hover:bg-slate-800/20 ${item.status === "rejected" ? "opacity-40" : ""}`}>
                         <td className="px-4 py-3">
                           <p className="font-bold text-white">{item.product_name}</p>
                           <p className="text-[9px] text-slate-500">
@@ -519,6 +521,9 @@ export default function GRNPage() {
                                 className={`p-1.5 rounded-lg text-[9px] font-black transition-all ${item.status === "rejected" ? "bg-green-500/20 text-green-400 hover:bg-green-500/40" : "bg-red-500/10 text-red-400 hover:bg-red-500/30"}`}>
                                 {item.status === "rejected" ? <CheckCircle size={12} /> : <XCircle size={12} />}
                               </button>
+                              <button onClick={() => setEditItem(item)} className="p-1.5 bg-slate-800 hover:bg-blue-500/20 text-slate-500 hover:text-blue-400 rounded-lg transition-all">
+                                <Edit3 size={12} />
+                              </button>
                               <button onClick={() => handleDeleteItem(item.id)} className="p-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-all">
                                 <Trash2 size={12} />
                               </button>
@@ -526,6 +531,61 @@ export default function GRNPage() {
                           </td>
                         )}
                       </tr>
+                      {editItem?.id === item.id && (
+                        <tr className="bg-slate-900 border-b border-slate-800">
+                          <td colSpan={6} className="p-4 border-l-4 border-blue-500">
+                            <div className="flex flex-col gap-3">
+                              <p className="text-[10px] font-black uppercase text-blue-400">Edit Line Item</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                <div className="col-span-2">
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Product Name</label>
+                                  <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs"
+                                    value={editItem.product_name} onChange={e => setEditItem({ ...editItem, product_name: e.target.value })} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Batch No.</label>
+                                  <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs font-mono"
+                                    value={editItem.batch_no} onChange={e => setEditItem({ ...editItem, batch_no: e.target.value })} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Expiry (YYYY-MM-DD)</label>
+                                  <input type="text" placeholder="YYYY-MM-DD" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs font-mono"
+                                    value={editItem.expiry_date || ""} onChange={e => setEditItem({ ...editItem, expiry_date: e.target.value })} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Qty</label>
+                                  <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center"
+                                    value={editItem.qty} onChange={e => setEditItem({ ...editItem, qty: Number(e.target.value) })} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Free Qty</label>
+                                  <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center"
+                                    value={editItem.qty_free} onChange={e => setEditItem({ ...editItem, qty_free: Number(e.target.value) })} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">PTR/Rate (₹)</label>
+                                  <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center"
+                                    value={editItem.rate} onChange={e => setEditItem({ ...editItem, rate: Number(e.target.value) })} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">MRP (₹)</label>
+                                  <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center"
+                                    value={editItem.mrp} onChange={e => setEditItem({ ...editItem, mrp: Number(e.target.value) })} />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 mt-2">
+                                <button onClick={() => handleUpdateItem(editItem)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-white transition-all flex items-center gap-1">
+                                  <Save size={12} /> Save Changes
+                                </button>
+                                <button onClick={() => setEditItem(null)} className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
