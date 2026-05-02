@@ -652,6 +652,11 @@ export default function GRNPage() {
                                   <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center"
                                     value={editItem.mrp} onChange={e => setEditItem({ ...editItem, mrp: Number(e.target.value) })} />
                                 </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">GST %</label>
+                                  <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center font-bold"
+                                    value={editItem.gst_rate} onChange={e => setEditItem({ ...editItem, gst_rate: Number(e.target.value) })} />
+                                </div>
                               </div>
                               <div className="flex items-center justify-between mt-4">
                                 <div className="flex items-center gap-2">
