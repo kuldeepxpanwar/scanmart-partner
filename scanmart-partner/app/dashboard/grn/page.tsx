@@ -623,6 +623,11 @@ export default function GRNPage() {
                                   </div>
                                 </div>
                                 <div>
+                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">HSN</label>
+                                  <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs font-mono"
+                                    value={editItem.hsn_code} onChange={e => setEditItem({ ...editItem, hsn_code: e.target.value })} />
+                                </div>
+                                <div>
                                   <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Batch No.</label>
                                   <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs font-mono"
                                     value={editItem.batch_no} onChange={e => setEditItem({ ...editItem, batch_no: e.target.value })} />
@@ -672,11 +677,20 @@ export default function GRNPage() {
                                     Cancel
                                   </button>
                                 </div>
-                                <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-700 flex items-center gap-3">
-                                  <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Line Total:</span>
-                                  <span className="text-green-400 font-black text-sm">
-                                    ₹{((editItem.qty * editItem.rate * (1 - (editItem.discount || 0)/100)) * (1 + (editItem.gst_rate || 0)/100)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                  </span>
+                                <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-700 flex flex-col md:flex-row items-end md:items-center gap-2 md:gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Base Amt:</span>
+                                    <span className="text-white font-bold text-sm">
+                                      ₹{(editItem.qty * editItem.rate).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </span>
+                                  </div>
+                                  <div className="hidden md:block w-px h-6 bg-slate-700"></div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Line Total:</span>
+                                    <span className="text-green-400 font-black text-sm">
+                                      ₹{((editItem.qty * editItem.rate * (1 - (editItem.discount || 0)/100)) * (1 + (editItem.gst_rate || 0)/100)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -767,11 +781,19 @@ export default function GRNPage() {
                   className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2">
                   <PlusCircle size={18} /> Add Item to GRN
                 </button>
-                <div className="bg-slate-800 md:w-64 py-4 px-6 rounded-2xl border border-slate-700 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Line Total</span>
-                  <span className="text-green-400 font-black text-lg">
-                    ₹{((Number(newItem.qty) * Number(newItem.rate) * (1 - Number(newItem.discount || 0)/100)) * (1 + Number(newItem.gst_rate || 0)/100)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                  </span>
+                <div className="bg-slate-800 py-4 px-6 rounded-2xl border border-slate-700 flex flex-col items-end justify-center gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Base Amt</span>
+                    <span className="text-white font-bold text-sm">
+                      ₹{(Number(newItem.qty) * Number(newItem.rate)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Line Total</span>
+                    <span className="text-green-400 font-black text-lg">
+                      ₹{((Number(newItem.qty) * Number(newItem.rate) * (1 - Number(newItem.discount || 0)/100)) * (1 + Number(newItem.gst_rate || 0)/100)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
