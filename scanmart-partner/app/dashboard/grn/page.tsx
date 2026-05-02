@@ -653,18 +653,26 @@ export default function GRNPage() {
                                     value={editItem.mrp} onChange={e => setEditItem({ ...editItem, mrp: Number(e.target.value) })} />
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 mt-2">
-                                <button onClick={() => {
-                                  const v = ((editItem as any)._variant_label || '').trim().toUpperCase();
-                                  const b = ((editItem as any)._base_name !== undefined ? (editItem as any)._base_name : editItem.product_name).trim();
-                                  const finalName = v ? `${b}-${v}` : b;
-                                  handleUpdateItem({ ...editItem, product_name: finalName });
-                                }} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-white transition-all flex items-center gap-1">
-                                  <Save size={12} /> Save Changes
-                                </button>
-                                <button onClick={() => setEditItem(null)} className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all">
-                                  Cancel
-                                </button>
+                              <div className="flex items-center justify-between mt-4">
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => {
+                                    const v = ((editItem as any)._variant_label || '').trim().toUpperCase();
+                                    const b = ((editItem as any)._base_name !== undefined ? (editItem as any)._base_name : editItem.product_name).trim();
+                                    const finalName = v ? `${b}-${v}` : b;
+                                    handleUpdateItem({ ...editItem, product_name: finalName });
+                                  }} className="bg-blue-600 hover:bg-blue-500 px-4 py-2.5 rounded-lg text-[10px] font-black uppercase text-white transition-all flex items-center gap-1">
+                                    <Save size={14} /> Save Changes
+                                  </button>
+                                  <button onClick={() => setEditItem(null)} className="bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-lg text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all">
+                                    Cancel
+                                  </button>
+                                </div>
+                                <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-700 flex items-center gap-3">
+                                  <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Line Total:</span>
+                                  <span className="text-green-400 font-black text-sm">
+                                    ₹{((editItem.qty * editItem.rate * (1 - (editItem.discount || 0)/100)) * (1 + (editItem.gst_rate || 0)/100)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -749,9 +757,18 @@ export default function GRNPage() {
                     value={newItem.gst_rate} onChange={e => setNewItem({ ...newItem, gst_rate: e.target.value })} />
                 </div>
               </div>
-              <button onClick={handleAddItem} className="bg-slate-700 hover:bg-green-700 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all">
-                <Plus size={14} /> Add Item
-              </button>
+              <div className="flex flex-col md:flex-row items-stretch gap-3 mt-4">
+                <button onClick={handleAddItem} disabled={!newItem.product_name || !newItem.qty}
+                  className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2">
+                  <PlusCircle size={18} /> Add Item to GRN
+                </button>
+                <div className="bg-slate-800 md:w-64 py-4 px-6 rounded-2xl border border-slate-700 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Line Total</span>
+                  <span className="text-green-400 font-black text-lg">
+                    ₹{((Number(newItem.qty) * Number(newItem.rate) * (1 - Number(newItem.discount || 0)/100)) * (1 + Number(newItem.gst_rate || 0)/100)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
