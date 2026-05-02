@@ -573,7 +573,19 @@ export default function GRNPage() {
                                 className={`p-1.5 rounded-lg text-[9px] font-black transition-all ${item.status === "rejected" ? "bg-green-500/20 text-green-400 hover:bg-green-500/40" : "bg-red-500/10 text-red-400 hover:bg-red-500/30"}`}>
                                 {item.status === "rejected" ? <CheckCircle size={12} /> : <XCircle size={12} />}
                               </button>
-                              <button onClick={() => setEditItem(item)} className="p-1.5 bg-slate-800 hover:bg-blue-500/20 text-slate-500 hover:text-blue-400 rounded-lg transition-all">
+                              <button onClick={() => {
+                                const p = item.product_name;
+                                const hyphenIdx = p.lastIndexOf('-');
+                                if (hyphenIdx > 0) {
+                                  setEditItem({ 
+                                    ...item, 
+                                    _base_name: p.substring(0, hyphenIdx).trim(), 
+                                    _variant_label: p.substring(hyphenIdx + 1).trim() 
+                                  } as any);
+                                } else {
+                                  setEditItem(item);
+                                }
+                              }} className="p-1.5 bg-slate-800 hover:bg-blue-500/20 text-slate-500 hover:text-blue-400 rounded-lg transition-all">
                                 <Edit3 size={12} />
                               </button>
                               <button onClick={() => handleDeleteItem(item.id)} className="p-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-all">
@@ -592,9 +604,16 @@ export default function GRNPage() {
                                 <div className="col-span-2">
                                   <div className="flex items-end gap-2">
                                     <div className="flex-1">
-                                      <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Product Name</label>
-                                      <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs"
-                                        value={editItem.product_name} onChange={e => setEditItem({ ...editItem, product_name: e.target.value })} />
+                                      <label className="text-[9px] font-bold uppercase text-blue-400 block mb-1">Base Name</label>
+                                      <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 outline-none focus:border-blue-500 text-white text-xs"
+                                        value={(editItem as any)._base_name !== undefined ? (editItem as any)._base_name : editItem.product_name} 
+                                        onChange={e => setEditItem({ ...editItem, _base_name: e.target.value } as any)} />
+                                    </div>
+                                    <div className="w-24">
+                                      <label className="text-[9px] font-bold uppercase text-orange-400 block mb-1">Variant</label>
+                                      <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-orange-500/30 outline-none focus:border-orange-500 text-orange-300 font-bold text-xs text-center"
+                                        value={(editItem as any)._variant_label || ""} 
+                                        onChange={e => setEditItem({ ...editItem, _variant_label: e.target.value } as any)} />
                                     </div>
                                     <div className="w-16">
                                       <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Dis (%)</label>
@@ -635,7 +654,12 @@ export default function GRNPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 mt-2">
-                                <button onClick={() => handleUpdateItem(editItem)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-white transition-all flex items-center gap-1">
+                                <button onClick={() => {
+                                  const v = ((editItem as any)._variant_label || '').trim().toUpperCase();
+                                  const b = ((editItem as any)._base_name !== undefined ? (editItem as any)._base_name : editItem.product_name).trim();
+                                  const finalName = v ? `${b}-${v}` : b;
+                                  handleUpdateItem({ ...editItem, product_name: finalName });
+                                }} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-white transition-all flex items-center gap-1">
                                   <Save size={12} /> Save Changes
                                 </button>
                                 <button onClick={() => setEditItem(null)} className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all">
