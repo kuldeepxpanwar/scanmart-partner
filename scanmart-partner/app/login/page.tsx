@@ -91,30 +91,51 @@ export default function LoginPage() {
 
         if (authError) throw authError;
 
-        // 3. Create Staff Profile linked to Owner ID — no data leak
+        // 3. Create Staff Profile + Default Store — prevents blank dashboard bug
         if (authData.user) {
+          // 3a. Create default store for this new user
+          const { data: newStore, error: storeError } = await supabase
+            .from('stores')
+            .insert([{
+              name: shopName || "My Store",
+              owner_id: authData.user.id,
+              is_main_store: true,
+              location: "",
+            }])
+            .select()
+            .single();
+
+          if (storeError) {
+            console.error("Store DB Error:", storeError);
+            // Non-fatal — user can create store from settings
+          }
+
+          // 3b. Create Staff Profile linked to the new store
           const { error: staffError } = await supabase
             .from('staff')
-            .insert([
-              {
-                id: authData.user.id,
-                name: "Shop Owner",
-                role: "admin",
-                pin_code: pin,
-                is_active: true,
-                shop_id: authData.user.id,
-              }
-            ]);
+            .insert([{
+              id: authData.user.id,
+              name: "Shop Owner",
+              role: "admin",
+              pin_code: pin,
+              is_active: true,
+              shop_id: authData.user.id,
+              store_id: newStore?.id || null, // 🔥 Link staff to new store
+            }]);
 
           if (staffError) {
             console.error("Staff DB Error:", staffError);
             throw new Error("Account created but failed to setup Shop Database. Contact Support.");
           }
+
+          // 3c. Pre-set the new store ID in localStorage so dashboard loads correctly
+          if (newStore?.id && typeof window !== 'undefined') {
+            localStorage.setItem("active_store_id", newStore.id);
+          }
         }
 
-        // 3. Check if email confirmation is required
+        // 4. Check if email confirmation is required
         if (authData.user && !authData.user.email_confirmed_at) {
-          // Supabase email confirmation is enabled — show verify email screen
           setSuccessMsg("📬 Check your email! We've sent a verification link. Please verify before logging in.");
           setLoading(false);
           return;

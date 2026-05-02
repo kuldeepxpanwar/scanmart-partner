@@ -278,7 +278,10 @@ export default function InventoryPage() {
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterType, showArchived]);
 
   const fetchStoresFirst = async () => {
-    const { data } = await supabase.from("stores").select("*").limit(1);
+    // 🔥 BUG FIX: Always scope by owner_id — never pull a random store from DB
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("stores").select("*").eq("owner_id", user.id).order("is_main_store", { ascending: false }).limit(1);
     if (data && data.length > 0) {
       setActiveStoreId(data[0].id);
       localStorage.setItem("active_store_id", data[0].id);
@@ -286,7 +289,10 @@ export default function InventoryPage() {
   };
 
   const fetchStoresList = async () => {
-    const { data } = await supabase.from("stores").select("*");
+    // 🔥 BUG FIX: Only show this owner's stores in the dropdown
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("stores").select("*").eq("owner_id", user.id);
     if (data) setStores(data);
   };
 
