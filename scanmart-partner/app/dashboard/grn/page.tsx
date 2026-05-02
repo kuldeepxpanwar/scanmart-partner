@@ -10,14 +10,14 @@ import {
 
 type GRNSession = {
   id: string; store_id: string; supplier_name: string; invoice_no: string;
-  invoice_date: string; status: string; notes: string;
+  invoice_date: string; status: string; notes: string; invoice_amount: number;
   total_items: number; total_value: number; created_at: string; finalized_at: string;
 };
 type GRNItem = {
   id: string; grn_id: string; product_name: string; matched_product_id: string | null;
   is_new_product: boolean; category: string; hsn_code: string; batch_no: string;
   expiry_date: string; qty: number; qty_free: number; mrp: number; rate: number;
-  gst_rate: number; status: string; review_note: string;
+  discount: number; gst_rate: number; status: string; review_note: string;
 };
 
 const CATS = ["Tablet","Capsule","Syrup","Injection","Cream","Drops","Sachet","Pharmacy","General"];
@@ -36,13 +36,13 @@ export default function GRNPage() {
   const [editItem, setEditItem] = useState<GRNItem | null>(null);
 
   // New Session Form
-  const [form, setForm] = useState({ supplier_name: "", invoice_no: "", invoice_date: "", notes: "" });
+  const [form, setForm] = useState({ supplier_name: "", invoice_no: "", invoice_date: "", notes: "", invoice_amount: "" });
 
   // Add Item Form
   const [newItem, setNewItem] = useState({
     product_name: "", category: "Pharmacy", hsn_code: "3004",
     batch_no: "", expiry_date: "", qty: "", qty_free: "0",
-    mrp: "", rate: "", gst_rate: "5"
+    mrp: "", rate: "", discount: "0", gst_rate: "5"
   });
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function GRNPage() {
 
   const fetchInventory = async (storeId: string) => {
     const { data } = await supabase.from("inventory")
-      .select("id, name, stock, buying_price")
+      .select("id, name, stock, buying_price, gst_rate")
       .eq("store_id", storeId).eq("is_active", true);
     setInventoryList(data || []);
   };
@@ -103,6 +103,7 @@ export default function GRNPage() {
       store_id: activeStoreId,
       supplier_name: form.supplier_name,
       invoice_no: form.invoice_no,
+      invoice_amount: Number(form.invoice_amount) || 0,
       invoice_date: form.invoice_date || null,
       notes: form.notes,
       status: "draft",
@@ -148,13 +149,14 @@ export default function GRNPage() {
       qty_free: Number(newItem.qty_free) || 0,
       mrp: Number(newItem.mrp) || 0,
       rate: Number(newItem.rate) || 0,
+      discount: Number(newItem.discount) || 0,
       gst_rate: Number(newItem.gst_rate) || 5,
       status: "pending"
     }).select().single();
     if (error) toast.error(error.message);
     else {
       setItems(prev => [...prev, data]);
-      setNewItem({ product_name: "", category: "Pharmacy", hsn_code: "3004", batch_no: "", expiry_date: "", qty: "", qty_free: "0", mrp: "", rate: "", gst_rate: "5" });
+      setNewItem({ product_name: "", category: "Pharmacy", hsn_code: "3004", batch_no: "", expiry_date: "", qty: "", qty_free: "0", mrp: "", rate: "", discount: "0", gst_rate: "5" });
       toast.success("Item added to GRN!");
     }
   };
@@ -173,6 +175,7 @@ export default function GRNPage() {
       qty_free: Number(item.qty_free),
       mrp: Number(item.mrp),
       rate: Number(item.rate),
+      discount: Number(item.discount),
       gst_rate: Number(item.gst_rate),
       status: item.status,
       review_note: item.review_note
@@ -199,10 +202,21 @@ export default function GRNPage() {
         const cols = line.split(",");
         const name = cols[0]?.trim();
         if (!name) continue;
-        const qty = Number(cols[2]?.trim()) || 0;
-        const qtyFree = Number(cols[3]?.trim()) || 0;
+        
+        let qtyStr = cols[2]?.trim() || "0";
+        let qty = 0, qtyFree = 0;
+        if (qtyStr.includes("+")) {
+          const parts = qtyStr.split("+");
+          qty = Number(parts[0]) || 0;
+          qtyFree = Number(parts[1]) || 0;
+        } else {
+          qty = Number(qtyStr) || 0;
+          qtyFree = Number(cols[3]?.trim()) || 0;
+        }
+        
         const rate = Number(cols[7]?.trim()) || 0;
         const mrp = Number(cols[6]?.trim()) || 0;
+        const discount = Number(cols[8]?.trim()) || 0; // Assuming Col 8 is Discount
         const match = inventoryList.find(p => p.name.toLowerCase() === name.toLowerCase());
         await supabase.from("grn_items").insert({
           grn_id: activeSession.id, store_id: activeStoreId,
@@ -211,7 +225,7 @@ export default function GRNPage() {
           hsn_code: cols[1]?.trim() || "3004",
           batch_no: cols[4]?.trim() || "",
           expiry_date: cols[5]?.trim() ? parseExpiry(cols[5].trim()) : null,
-          qty, qty_free: qtyFree, mrp, rate,
+          qty, qty_free: qtyFree, mrp, rate, discount,
           gst_rate: (Number(cols[9]?.trim()) || 0) + (Number(cols[10]?.trim()) || 0),
           status: "pending"
         });
@@ -228,6 +242,12 @@ export default function GRNPage() {
     if (!activeSession || !activeStoreId) return;
     const approvedItems = items.filter(i => i.status !== "rejected");
     if (approvedItems.length === 0) return toast.error("No items to finalize!");
+    
+    const newItemsCount = approvedItems.filter(i => i.is_new_product).length;
+    if (newItemsCount > 0) {
+      if (!confirm(`WARNING: You are about to create ${newItemsCount} NEW products in the Master Inventory. Do you want to proceed?`)) return;
+    }
+    
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -235,7 +255,9 @@ export default function GRNPage() {
       for (const item of approvedItems) {
         const totalQty = (Number(item.qty) || 0) + (Number(item.qty_free) || 0);
         let productId = item.matched_product_id;
-        const landedCost = Number(item.qty_free) > 0 ? (Number(item.qty) * Number(item.rate)) / totalQty : Number(item.rate);
+        const discountedRate = Number(item.rate) * (1 - (Number(item.discount) || 0) / 100);
+        const landedCost = totalQty > 0 ? (Number(item.qty) * discountedRate) / totalQty : discountedRate;
+        
         if (!productId) {
           const { data: np } = await supabase.from("inventory").insert({
             name: item.product_name, stock: totalQty, mrp: item.mrp,
@@ -391,7 +413,7 @@ export default function GRNPage() {
             <input type="text" placeholder="e.g. Ashish Agencies" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold"
               value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Invoice No.</label>
               <input type="text" placeholder="e.g. INV-2024-001" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-mono"
@@ -401,6 +423,11 @@ export default function GRNPage() {
               <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Invoice Date</label>
               <input type="date" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white"
                 value={form.invoice_date} onChange={e => setForm({ ...form, invoice_date: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Invoice Amount (₹)</label>
+              <input type="number" placeholder="0.00" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold"
+                value={form.invoice_amount} onChange={e => setForm({ ...form, invoice_amount: e.target.value })} />
             </div>
           </div>
           <div>
@@ -434,8 +461,21 @@ export default function GRNPage() {
               <p className="font-black text-white">{items.length}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Total Value</p>
-              <p className="font-black text-green-400">₹{items.reduce((s, i) => s + (Number(i.qty) + Number(i.qty_free)) * Number(i.rate), 0).toLocaleString()}</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Expected Invoice</p>
+              <p className="font-black text-white">₹{Number(activeSession.invoice_amount || 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Calculated Total</p>
+              <p className="font-black text-green-400">₹{items.reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Difference</p>
+              {(() => {
+                const calcTotal = items.reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0);
+                const diff = (activeSession.invoice_amount || 0) - calcTotal;
+                const isMatch = Math.abs(diff) < 10;
+                return <p className={`font-black ${isMatch ? "text-green-500" : "text-red-500"}`}>{isMatch ? "MATCH" : `${diff > 0 ? "+" : ""}₹${diff.toFixed(2)}`}</p>;
+              })()}
             </div>
             <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ${statusBadge(activeSession.status)}`}>{activeSession.status}</span>
           </div>
@@ -484,7 +524,12 @@ export default function GRNPage() {
                       <React.Fragment key={item.id}>
                       <tr className={`border-b border-slate-800/50 hover:bg-slate-800/20 ${item.status === "rejected" ? "opacity-40" : ""}`}>
                         <td className="px-4 py-3">
-                          <p className="font-bold text-white">{item.product_name}</p>
+                          <p className="font-bold text-white flex items-center gap-1">
+                            {item.product_name}
+                            {item.matched_product_id && inventoryList.find(p => p.id === item.matched_product_id)?.gst_rate !== item.gst_rate && (
+                              <span title={`Master DB GST is ${inventoryList.find(p => p.id === item.matched_product_id)?.gst_rate}%`} className="bg-red-500/20 text-red-400 text-[8px] px-1.5 py-0.5 rounded flex items-center gap-0.5">⚠️ GST</span>
+                            )}
+                          </p>
                           <p className="text-[9px] text-slate-500">
                             {item.is_new_product ? <span className="text-blue-400 font-bold">NEW</span> : <span className="text-green-400 font-bold">MATCH</span>}
                             {" · "}{item.category} · GST {item.gst_rate}%
@@ -499,15 +544,22 @@ export default function GRNPage() {
                           <p className="text-[9px] text-slate-500">{item.qty}+{item.qty_free} free</p>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <p className="font-bold text-white">PTR: ₹{item.rate}</p>
-                          <p className="text-[9px] text-green-400 font-bold tracking-widest mt-0.5">
-                            LANDED: ₹{((Number(item.qty) * Number(item.rate)) / (Number(item.qty) + Number(item.qty_free)) || Number(item.rate)).toFixed(2)}
-                          </p>
-                          {Number(item.mrp) > 0 && (
-                            <p className="text-[9px] text-orange-300 font-bold mt-0.5 border-t border-slate-700 pt-0.5 inline-block">
-                              MARGIN: {(((Number(item.mrp) - ((Number(item.qty) * Number(item.rate)) / (Number(item.qty) + Number(item.qty_free)) || Number(item.rate))) / Number(item.mrp)) * 100).toFixed(1)}%
-                            </p>
-                          )}
+                          <p className="font-bold text-white">PTR: ₹{item.rate} {Number(item.discount) > 0 && <span className="text-[9px] text-orange-400 font-bold">(-{item.discount}%)</span>}</p>
+                          {(() => {
+                            const discountedRate = Number(item.rate) * (1 - (Number(item.discount) || 0) / 100);
+                            const landed = (Number(item.qty) + Number(item.qty_free)) > 0 ? (Number(item.qty) * discountedRate) / (Number(item.qty) + Number(item.qty_free)) : discountedRate;
+                            const margin = Number(item.mrp) > 0 ? (((Number(item.mrp) - landed) / Number(item.mrp)) * 100).toFixed(1) : "0.0";
+                            return (
+                              <>
+                                <p className="text-[9px] text-green-400 font-bold tracking-widest mt-0.5">LANDED: ₹{landed.toFixed(2)}</p>
+                                {Number(item.mrp) > 0 && (
+                                  <p className={`text-[9px] font-bold mt-0.5 border-t border-slate-700 pt-0.5 inline-block ${Number(margin) < 0 ? "text-red-400" : "text-orange-300"}`}>
+                                    MARGIN: {margin}%
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase border ${
@@ -538,9 +590,18 @@ export default function GRNPage() {
                               <p className="text-[10px] font-black uppercase text-blue-400">Edit Line Item</p>
                               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                                 <div className="col-span-2">
-                                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Product Name</label>
-                                  <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs"
-                                    value={editItem.product_name} onChange={e => setEditItem({ ...editItem, product_name: e.target.value })} />
+                                  <div className="flex items-end gap-2">
+                                    <div className="flex-1">
+                                      <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Product Name</label>
+                                      <input type="text" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs"
+                                        value={editItem.product_name} onChange={e => setEditItem({ ...editItem, product_name: e.target.value })} />
+                                    </div>
+                                    <div className="w-16">
+                                      <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Dis (%)</label>
+                                      <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-orange-400 font-bold text-xs text-center"
+                                        value={editItem.discount} onChange={e => setEditItem({ ...editItem, discount: Number(e.target.value) })} />
+                                    </div>
+                                  </div>
                                 </div>
                                 <div>
                                   <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Batch No.</label>
@@ -644,6 +705,11 @@ export default function GRNPage() {
                     value={newItem.qty_free} onChange={e => setNewItem({ ...newItem, qty_free: e.target.value })} />
                 </div>
                 <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Dis (%)</label>
+                  <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-orange-400 font-bold text-center text-sm"
+                    value={newItem.discount} onChange={e => setNewItem({ ...newItem, discount: e.target.value })} />
+                </div>
+                <div>
                   <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">MRP (₹)</label>
                   <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
                     value={newItem.mrp} onChange={e => setNewItem({ ...newItem, mrp: e.target.value })} />
@@ -668,7 +734,8 @@ export default function GRNPage() {
           {/* Finalize / Cancel */}
           {activeSession.status === "draft" && (
             <div className="flex gap-3">
-              <button onClick={handleFinalizeGRN} disabled={saving || items.filter(i => i.status !== "rejected").length === 0}
+              <button onClick={handleFinalizeGRN} 
+                disabled={saving || items.filter(i => i.status !== "rejected").length === 0 || (activeSession.invoice_amount > 0 && Math.abs((activeSession.invoice_amount || 0) - items.reduce((s, i) => s + (Number(i.qty) * Number(i.rate) * (1 - Number(i.discount || 0)/100) * (1 + Number(i.gst_rate || 0)/100)), 0)) > 10)}
                 className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-40 py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all text-sm">
                 {saving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
                 Finalize GRN → Push to Inventory
