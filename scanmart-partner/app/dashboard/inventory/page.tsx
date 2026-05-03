@@ -79,7 +79,7 @@ const CATEGORY_PACKAGING: Record<string, { pack_size: number; strip_size: number
   'Cream': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
   'Drops': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
   'Sachet': { pack_size: 1, strip_size: 10, sell_unit: 'strip' },
-  'Pharmacy': { pack_size: 10, strip_size: 10, sell_unit: 'strip' },
+  'Pharmacy': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
   'General': { pack_size: 1, strip_size: 1, sell_unit: 'piece' },
 };
 
@@ -1506,15 +1506,22 @@ export default function InventoryPage() {
                       </td>
                       <td className="p-5">
                         {(() => {
-                          const ps = Number(item.pack_size) || 1;
                           const ss = Number(item.strip_size) || 1;
-                          const isTablet = ps > 1 || ss > 1;
-                          const strips = isTablet ? Math.floor(item.stock / ss) : item.stock;
-                          const loose = isTablet ? item.stock % ss : 0;
-                          const label = isTablet
-                            ? `${strips}s${loose > 0 ? `+${loose}t` : ''}`
-                            : `${item.stock}`;
-                          return <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${item.stock < 10 ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>{label} {isTablet ? 'strips' : 'UNITS'}</span>;
+                          const st = Number(item.stock) || 0;
+                          if (ss <= 1) {
+                            return <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${st < 10 ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>{st} UNITS</span>;
+                          }
+                          const strips = Math.floor(st / ss);
+                          const loose = st % ss;
+                          const label = `${strips}s${loose > 0 ? `+${loose}t` : ''}`;
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${strips < 5 ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>
+                                {label} strips
+                              </span>
+                              <span className="text-[9px] text-slate-500 font-bold pl-1">{st} tabs</span>
+                            </div>
+                          );
                         })()}
                       </td>
                       <td className="p-5 text-right">
@@ -1623,15 +1630,30 @@ export default function InventoryPage() {
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Quantity</label>
+                              <label className="text-[9px] font-bold uppercase text-slate-500">
+                                Quantity
+                                {batchProduct && Number(batchProduct.strip_size) > 1 && (
+                                  <span className="text-purple-400 ml-1">(in tablets)</span>
+                                )}
+                              </label>
                               <input type="number" min="0"
                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold outline-none focus:border-yellow-500 text-white text-center"
                                 value={editingBatch.quantity}
                                 onChange={e => setEditingBatch({ ...editingBatch, quantity: e.target.value })}
                               />
+                              {batchProduct && Number(batchProduct.strip_size) > 1 && Number(editingBatch.quantity) > 0 && (
+                                <p className="text-[9px] text-purple-400 font-bold mt-0.5">
+                                  = {Math.floor(Number(editingBatch.quantity) / Number(batchProduct.strip_size))} strips
+                                </p>
+                              )}
                             </div>
                             <div>
-                              <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Buying Price (&#8377;)</label>
+                              <label className="text-[9px] font-bold uppercase text-slate-500">
+                                Buying Price
+                                {batchProduct && Number(batchProduct.strip_size) > 1 && (
+                                  <span className="text-green-400 ml-1">(&#8377;/tablet)</span>
+                                )}
+                              </label>
                               <input type="number" min="0"
                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold outline-none focus:border-yellow-500 text-white text-center"
                                 value={editingBatch.buying_price}
@@ -2278,7 +2300,29 @@ export default function InventoryPage() {
       {isEditOpen && editItem && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h2 className="text-2xl font-bold mb-6 italic text-yellow-500">Edit <span className="text-white">Product</span></h2>
+            <h2 className="text-2xl font-bold mb-2 italic text-yellow-500">Edit <span className="text-white">Product</span></h2>
+            {/* 💊 Unit Clarity Banner */}
+            {(() => {
+              const ss = Number(editItem.strip_size) || 1;
+              const st = Number(editItem.stock) || 0;
+              if (ss <= 1) return (
+                <div className="mb-4 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 flex items-center gap-3 text-[10px] font-bold">
+                  <span className="text-slate-400">📦 Stock:</span>
+                  <span className="text-white font-black">{st} pieces</span>
+                  <span className="text-slate-500 ml-auto">sell_unit: {editItem.sell_unit || 'piece'}</span>
+                </div>
+              );
+              const strips = Math.floor(st / ss);
+              const loose = st % ss;
+              return (
+                <div className="mb-4 bg-purple-900/20 border border-purple-500/30 rounded-xl px-4 py-2.5 flex flex-wrap gap-3 text-[10px] font-bold">
+                  <span className="text-purple-300">💊 Stock:</span>
+                  <span className="text-white font-black">{st} tablets</span>
+                  <span className="text-purple-400">= {strips} strips{loose > 0 ? ` + ${loose} loose` : ''}</span>
+                  <span className="text-slate-500 ml-auto">{ss} tabs/strip</span>
+                </div>
+              );
+            })()}
             <div className="space-y-4">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
@@ -2437,11 +2481,33 @@ export default function InventoryPage() {
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
-                <input type="number" placeholder="Offer Price" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none" value={editItem.price || ""} onChange={(e) => setEditItem({ ...editItem, price: e.target.value })} />
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">
+                    {Number(editItem.strip_size) > 1 ? 'MRP/Strip (₹)' : 'MRP/Piece (₹)'}
+                  </label>
+                  <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">
+                    {Number(editItem.strip_size) > 1 ? 'Sell Price/Strip (₹)' : 'Sell Price/Piece (₹)'}
+                  </label>
+                  <input type="number" placeholder="Offer Price" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none" value={editItem.price || ""} onChange={(e) => setEditItem({ ...editItem, price: e.target.value })} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <input type="number" placeholder="Buying Price" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.buying_price || ""} onChange={(e) => setEditItem({ ...editItem, buying_price: e.target.value })} />
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-green-400 mb-1 block">
+                    {Number(editItem.strip_size) > 1 ? '💰 Buying Price/Tablet (₹)' : '💰 Buying Price/Piece (₹)'}
+                  </label>
+                  <div className="relative">
+                    <input type="number" placeholder="Buying Price" className="w-full bg-slate-800 p-3 rounded-xl border border-green-500/30 outline-none focus:border-green-500 text-green-400 font-bold" value={editItem.buying_price || ""} onChange={(e) => setEditItem({ ...editItem, buying_price: e.target.value })} />
+                    {Number(editItem.strip_size) > 1 && Number(editItem.buying_price) > 0 && (
+                      <div className="text-[8px] text-green-500 font-bold mt-0.5 pl-1">
+                        = ₹{(Number(editItem.buying_price) * Number(editItem.strip_size)).toFixed(2)}/strip
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer" value={editItem.gst_rate || "18"} onChange={(e) => setEditItem({ ...editItem, gst_rate: e.target.value })}>
                   {GST_SLABS.map(slab => <option key={slab.value} value={slab.value}>{slab.label}</option>)}
                 </select>

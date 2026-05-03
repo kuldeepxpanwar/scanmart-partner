@@ -18,6 +18,8 @@ type GRNItem = {
   is_new_product: boolean; category: string; hsn_code: string; batch_no: string;
   expiry_date: string; qty: number; qty_free: number; mrp: number; rate: number;
   discount: number; gst_rate: number; status: string; review_note: string;
+  // 💊 Unit conversion: tablets per strip (1 for syrup/inj/cream, N for tab/cap)
+  strip_size: number;
 };
 
 const CATS = ["Tablet","Capsule","Syrup","Injection","Cream","Drops","Sachet","Pharmacy","General"];
@@ -42,7 +44,9 @@ export default function GRNPage() {
   const [newItem, setNewItem] = useState({
     product_name: "", category: "Pharmacy", hsn_code: "3004",
     batch_no: "", expiry_date: "", qty: "", qty_free: "0",
-    mrp: "", rate: "", discount: "0", gst_rate: "5"
+    mrp: "", rate: "", discount: "0", gst_rate: "5",
+    // 💊 Tablets per strip: 10 for most tabs/caps, 1 for syrup/inj/cream
+    strip_size: "10",
   });
 
   useEffect(() => {
@@ -61,7 +65,7 @@ export default function GRNPage() {
 
   const fetchInventory = async (storeId: string) => {
     const { data } = await supabase.from("inventory")
-      .select("id, name, stock, buying_price, gst_rate")
+      .select("id, name, stock, buying_price, gst_rate, strip_size, pack_size, sell_unit")
       .eq("store_id", storeId).eq("is_active", true);
     setInventoryList(data || []);
   };
@@ -93,6 +97,14 @@ export default function GRNPage() {
     if (n.includes("GEL") || n.includes("CREAM") || n.includes("OINT")) return "Cream";
     if (n.includes("DROP") || n.includes("EYE") || n.includes("EAR")) return "Drops";
     return "Pharmacy";
+  };
+
+  // 💊 Helper: for a given category, what is the default strip_size?
+  // strip_size = tablets/units per strip. 1 = single-unit sell (syrup, inj, cream).
+  const defaultStripSize = (category: string): number => {
+    if (["Tablet", "Capsule", "Pharmacy"].includes(category)) return 10;
+    if (category === "Sachet") return 10;
+    return 1; // Syrup, Injection, Cream, Drops, General
   };
 
   const handleCreateSession = async () => {
@@ -135,6 +147,7 @@ export default function GRNPage() {
       : newItem.product_name.trim();
 
     const match = inventoryList.find(p => p.name.toLowerCase() === finalName.toLowerCase());
+    const resolvedStripSize = Number(newItem.strip_size) || defaultStripSize(newItem.category);
     const { data, error } = await supabase.from("grn_items").insert({
       grn_id: activeSession.id,
       store_id: activeStoreId,
@@ -151,12 +164,13 @@ export default function GRNPage() {
       rate: Number(newItem.rate) || 0,
       discount: Number(newItem.discount) || 0,
       gst_rate: Number(newItem.gst_rate) || 5,
+      strip_size: resolvedStripSize,
       status: "pending"
     }).select().single();
     if (error) toast.error(error.message);
     else {
       setItems(prev => [...prev, data]);
-      setNewItem({ product_name: "", category: "Pharmacy", hsn_code: "3004", batch_no: "", expiry_date: "", qty: "", qty_free: "0", mrp: "", rate: "", discount: "0", gst_rate: "5" });
+      setNewItem({ product_name: "", category: "Pharmacy", hsn_code: "3004", batch_no: "", expiry_date: "", qty: "", qty_free: "0", mrp: "", rate: "", discount: "0", gst_rate: "5", strip_size: "10" });
       toast.success("Item added to GRN!");
     }
   };
@@ -177,6 +191,7 @@ export default function GRNPage() {
       rate: Number(item.rate),
       discount: Number(item.discount),
       gst_rate: Number(item.gst_rate),
+      strip_size: Number(item.strip_size) || 1,
       status: item.status,
       review_note: item.review_note
     }).eq("id", item.id);
@@ -226,16 +241,20 @@ export default function GRNPage() {
         const cleanCgst = Math.abs(Number((cols[10]?.trim() || "0").replace(/[^0-9.-]/g, '')) || 0);
         const gst_rate = cleanSgst + cleanCgst;
 
+        const detectedCategory = autoCategory(name);
         const match = inventoryList.find(p => p.name.toLowerCase() === name.toLowerCase());
+        // 💊 If product already in inventory, use its strip_size; else use category default
+        const csvStripSize = match?.strip_size || defaultStripSize(detectedCategory);
         await supabase.from("grn_items").insert({
           grn_id: activeSession.id, store_id: activeStoreId,
           product_name: name, matched_product_id: match?.id || null,
-          is_new_product: !match, category: autoCategory(name),
+          is_new_product: !match, category: detectedCategory,
           hsn_code: hsn_code,
           batch_no: cols[4]?.trim() || "",
           expiry_date: cols[5]?.trim() ? parseExpiry(cols[5].trim()) : null,
           qty, qty_free: qtyFree, mrp, rate, discount,
           gst_rate: gst_rate,
+          strip_size: csvStripSize,
           status: "pending"
         });
         added++;
@@ -261,42 +280,104 @@ export default function GRNPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       let newCount = 0, updCount = 0;
+
       for (const item of approvedItems) {
-        const totalQty = (Number(item.qty) || 0) + (Number(item.qty_free) || 0);
+        // ─────────────────────────────────────────────────────
+        // 💊 UNIT CONVERSION — The Core Fix
+        // GRN fields:
+        //   item.qty      = strips purchased (e.g. 90)
+        //   item.qty_free = free strips      (e.g. 9)
+        //   item.rate     = PTR per strip    (e.g. ₹15.40)
+        //   item.mrp      = MRP per strip    (e.g. ₹16.00)
+        //   item.strip_size = tablets/units per strip (e.g. 10)
+        //
+        // Inventory fields (after this fix):
+        //   stock         = tablets (smallest unit)  → qty × strip_size
+        //   buying_price  = per tablet/piece cost    → landedCostPerStrip / strip_size
+        //   price         = per strip (POS uses this as base_price, then divides by strip_size for tablet price)
+        //   mrp           = per strip (same convention as price)
+        // ─────────────────────────────────────────────────────
+        const stripSize = Number(item.strip_size) || 1; // tablets per strip (1 for syrup/inj)
+        const qtyStrips = Number(item.qty) || 0;
+        const qtyFreeStrips = Number(item.qty_free) || 0;
+        const totalStrips = qtyStrips + qtyFreeStrips;
+
+        // Stock in tablets (smallest unit). For syrup/inj strip_size=1, so stays same.
+        const totalQtyInUnits = totalStrips * stripSize;
+
+        // Landed cost per strip (accounts for discount and free strips)
+        // Formula: you paid for qtyStrips strips at discounted rate, but got totalStrips strips
+        const ptrPerStrip = Number(item.rate) || 0;
+        const discountFactor = 1 - (Number(item.discount) || 0) / 100;
+        const discountedPtrPerStrip = ptrPerStrip * discountFactor;
+        const landedCostPerStrip = totalStrips > 0
+          ? (qtyStrips * discountedPtrPerStrip) / totalStrips
+          : discountedPtrPerStrip;
+
+        // Buying price per smallest unit (tablet/piece)
+        // For syrup strip_size=1 → landedCostPerUnit = landedCostPerStrip (unchanged)
+        const landedCostPerUnit = stripSize > 0 ? landedCostPerStrip / stripSize : landedCostPerStrip;
+
         let productId = item.matched_product_id;
-        const discountedRate = Number(item.rate) * (1 - (Number(item.discount) || 0) / 100);
-        const landedCost = totalQty > 0 ? (Number(item.qty) * discountedRate) / totalQty : discountedRate;
-        
+
         if (!productId) {
+          // ── NEW PRODUCT: create in inventory ──
           const { data: np } = await supabase.from("inventory").insert({
-            name: item.product_name, stock: totalQty, mrp: item.mrp,
-            price: item.mrp, buying_price: landedCost,
-            gst_rate: item.gst_rate, category: item.category,
-            hsn_code: item.hsn_code, store_id: activeStoreId,
-            is_active: true, last_sold_at: null
+            name: item.product_name,
+            stock: totalQtyInUnits,          // ✅ tablets
+            mrp: item.mrp,                   // ✅ per strip (POS convention)
+            price: item.mrp,                 // sell price = MRP per strip initially
+            buying_price: landedCostPerUnit, // ✅ per tablet/piece
+            ptr_per_strip: landedCostPerStrip, // 📌 invoice reference
+            gst_rate: item.gst_rate,
+            category: item.category,
+            hsn_code: item.hsn_code,
+            store_id: activeStoreId,
+            is_active: true,
+            last_sold_at: null,
+            // 💊 Packaging metadata — preserved from GRN
+            strip_size: stripSize,
+            pack_size: 1,                    // default; user can update in inventory edit
+            sell_unit: stripSize > 1 ? 'strip' : 'piece',
           }).select("id").single();
           productId = np?.id; newCount++;
         } else {
+          // ── EXISTING PRODUCT: add stock + update cost ──
           const existing = inventoryList.find(p => p.id === productId);
           await supabase.from("inventory").update({
-            stock: (existing?.stock || 0) + totalQty,
-            buying_price: landedCost, mrp: item.mrp
+            stock: (existing?.stock || 0) + totalQtyInUnits, // ✅ add tablets
+            buying_price: landedCostPerUnit,                 // ✅ per tablet
+            ptr_per_strip: landedCostPerStrip,               // 📌 invoice reference
+            mrp: item.mrp,                                   // update MRP per strip
           }).eq("id", productId);
           updCount++;
         }
+
+        // ── BATCH TRACKING ──
         if (productId && item.batch_no && item.expiry_date) {
           await supabase.from("inventory_batches").insert({
-            product_id: productId, store_id: activeStoreId,
-            batch_number: item.batch_no, expiry_date: item.expiry_date,
-            quantity: totalQty, buying_price: landedCost
+            product_id: productId,
+            store_id: activeStoreId,
+            batch_number: item.batch_no,
+            expiry_date: item.expiry_date,
+            quantity: totalQtyInUnits,       // ✅ tablets in this batch
+            buying_price: landedCostPerUnit, // ✅ per tablet
+            strip_size: stripSize,           // 📌 reference
           });
         }
       }
+
       await supabase.from("grn_sessions").update({
-        status: "finalized", finalized_at: new Date().toISOString(),
-        finalized_by: user?.id, total_items: approvedItems.length,
-        total_value: approvedItems.reduce((s, i) => s + ((Number(i.qty) + Number(i.qty_free)) * Number(i.rate)), 0)
+        status: "finalized",
+        finalized_at: new Date().toISOString(),
+        finalized_by: user?.id,
+        total_items: approvedItems.length,
+        // GRN total value = invoice value (strips × PTR per strip)
+        total_value: approvedItems.reduce(
+          (s, i) => s + ((Number(i.qty) + Number(i.qty_free)) * Number(i.rate)), 0
+        ),
       }).eq("id", activeSession.id);
+
       toast.success(`GRN Finalized! ${newCount} new + ${updCount} updated products.`);
       setActiveSession(prev => prev ? { ...prev, status: "finalized" } : prev);
       fetchInventory(activeStoreId);
@@ -558,8 +639,13 @@ export default function GRNPage() {
                           <p className="text-[9px] text-slate-500">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString("en-IN") : "—"}</p>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <p className="font-black text-white">{Number(item.qty) + Number(item.qty_free)}</p>
+                          <p className="font-black text-white">{Number(item.qty) + Number(item.qty_free)} strips</p>
                           <p className="text-[9px] text-slate-500">{item.qty}+{item.qty_free} free</p>
+                          {Number(item.strip_size) > 1 && (
+                            <p className="text-[9px] text-purple-400 font-bold mt-0.5">
+                              = {(Number(item.qty) + Number(item.qty_free)) * Number(item.strip_size)} tabs
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -567,12 +653,18 @@ export default function GRNPage() {
                             <p className="font-bold text-white">PTR: ₹{item.rate} {Number(item.discount) > 0 && <span className="text-[9px] text-orange-400 font-bold">(-{item.discount}%)</span>}</p>
                           </div>
                           {(() => {
+                            const ss = Number(item.strip_size) || 1;
                             const discountedRate = Number(item.rate) * (1 - (Number(item.discount) || 0) / 100);
-                            const landed = (Number(item.qty) + Number(item.qty_free)) > 0 ? (Number(item.qty) * discountedRate) / (Number(item.qty) + Number(item.qty_free)) : discountedRate;
-                            const margin = Number(item.mrp) > 0 ? (((Number(item.mrp) - landed) / Number(item.mrp)) * 100).toFixed(1) : "0.0";
+                            const totalStrips = Number(item.qty) + Number(item.qty_free);
+                            const landedPerStrip = totalStrips > 0 ? (Number(item.qty) * discountedRate) / totalStrips : discountedRate;
+                            const landedPerUnit = landedPerStrip / ss;
+                            const mrpPerUnit = Number(item.mrp) / ss;
+                            const margin = mrpPerUnit > 0 ? (((mrpPerUnit - landedPerUnit) / mrpPerUnit) * 100).toFixed(1) : "0.0";
                             return (
                               <>
-                                <p className="text-[9px] text-green-400 font-bold tracking-widest mt-0.5">LANDED: ₹{landed.toFixed(2)}</p>
+                                <p className="text-[9px] text-green-400 font-bold tracking-widest mt-0.5">
+                                  LANDED: {ss > 1 ? `₹${landedPerUnit.toFixed(2)}/tab` : `₹${landedPerStrip.toFixed(2)}/pc`}
+                                </p>
                                 {Number(item.mrp) > 0 && (
                                   <p className={`text-[9px] font-bold mt-0.5 border-t border-slate-700 pt-0.5 inline-block ${Number(margin) < 0 ? "text-red-400" : "text-orange-300"}`}>
                                     MARGIN: {margin}%
@@ -683,6 +775,12 @@ export default function GRNPage() {
                                   <input type="number" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-white text-xs text-center font-bold"
                                     value={editItem.gst_rate} onChange={e => setEditItem({ ...editItem, gst_rate: Number(e.target.value) })} />
                                 </div>
+                                <div>
+                                  <label className="text-[9px] font-bold uppercase text-purple-400 block mb-1">💊 Tabs/Strip</label>
+                                  <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-purple-500/30 outline-none focus:border-purple-500 text-purple-300 text-xs text-center font-bold"
+                                    value={editItem.strip_size || 1}
+                                    onChange={e => setEditItem({ ...editItem, strip_size: Number(e.target.value) })} />
+                                </div>
                               </div>
                               <div className="flex items-center justify-between mt-4">
                                 <div className="flex items-center gap-2">
@@ -747,7 +845,13 @@ export default function GRNPage() {
                 </div>
                 <div>
                   <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Category</label>
-                  <select className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-white text-sm" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })}>
+                  <select className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-white text-sm"
+                    value={newItem.category}
+                    onChange={e => {
+                      const cat = e.target.value;
+                      const ss = defaultStripSize(cat);
+                      setNewItem({ ...newItem, category: cat, strip_size: String(ss) });
+                    }}>
                     {CATS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -766,8 +870,22 @@ export default function GRNPage() {
                   <input type="text" placeholder="08/27" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-mono text-sm"
                     value={newItem.expiry_date} onChange={e => setNewItem({ ...newItem, expiry_date: e.target.value })} />
                 </div>
+
+                {/* 💊 Strip Size — KEY FIELD for unit conversion */}
                 <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Qty</label>
+                  <label className="text-[9px] font-bold uppercase text-purple-400 block mb-1">
+                    {Number(newItem.strip_size) > 1 ? '💊 Tabs/Strip' : '📦 Units/Pack'}
+                  </label>
+                  <input type="number" min="1" placeholder="10"
+                    className="w-full bg-slate-800 p-2.5 rounded-xl border border-purple-500/40 outline-none focus:border-purple-500 text-purple-300 font-bold text-center text-sm"
+                    value={newItem.strip_size}
+                    onChange={e => setNewItem({ ...newItem, strip_size: e.target.value })} />
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">
+                    {Number(newItem.strip_size) > 1 ? 'Qty (Strips)' : 'Qty (Pieces)'}
+                  </label>
                   <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
                     value={newItem.qty} onChange={e => setNewItem({ ...newItem, qty: e.target.value })} />
                 </div>
@@ -782,12 +900,16 @@ export default function GRNPage() {
                     value={newItem.discount} onChange={e => setNewItem({ ...newItem, discount: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">MRP (₹)</label>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">
+                    {Number(newItem.strip_size) > 1 ? 'MRP/Strip (₹)' : 'MRP/Piece (₹)'}
+                  </label>
                   <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
                     value={newItem.mrp} onChange={e => setNewItem({ ...newItem, mrp: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">Rate/PTR (₹)</label>
+                  <label className="text-[9px] font-bold uppercase text-slate-500 block mb-1">
+                    {Number(newItem.strip_size) > 1 ? 'PTR/Strip (₹)' : 'PTR/Piece (₹)'}
+                  </label>
                   <input type="number" placeholder="0" className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none focus:border-green-500 text-white font-bold text-center text-sm"
                     value={newItem.rate} onChange={e => setNewItem({ ...newItem, rate: e.target.value })} />
                 </div>
@@ -797,7 +919,36 @@ export default function GRNPage() {
                     value={newItem.gst_rate} onChange={e => setNewItem({ ...newItem, gst_rate: e.target.value })} />
                 </div>
               </div>
-              <div className="flex flex-col md:flex-row items-stretch gap-3 mt-4">
+              {/* 💊 Live Conversion Preview */}
+              {Number(newItem.qty) > 0 && Number(newItem.strip_size) > 0 && (
+                <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-4 py-3 flex flex-wrap gap-4 text-[10px] font-bold">
+                  <span className="text-purple-300">
+                    📦 {Number(newItem.qty) + Number(newItem.qty_free || 0)} strips
+                    → <span className="text-white font-black">{(Number(newItem.qty) + Number(newItem.qty_free || 0)) * Number(newItem.strip_size)} {Number(newItem.strip_size) > 1 ? 'tablets' : 'pieces'}</span> in inventory
+                  </span>
+                  {Number(newItem.rate) > 0 && (
+                    <span className="text-green-300">
+                      💰 Cost/tablet: <span className="text-white font-black">₹{
+                        Number(newItem.strip_size) > 1
+                          ? (() => {
+                              const ss = Number(newItem.strip_size);
+                              const q = Number(newItem.qty); const qf = Number(newItem.qty_free || 0);
+                              const discRate = Number(newItem.rate) * (1 - Number(newItem.discount || 0) / 100);
+                              const costPerStrip = (q + qf) > 0 ? (q * discRate) / (q + qf) : discRate;
+                              return (costPerStrip / ss).toFixed(2);
+                            })()
+                          : (Number(newItem.rate) * (1 - Number(newItem.discount || 0) / 100)).toFixed(2)
+                      }</span>
+                    </span>
+                  )}
+                  {Number(newItem.mrp) > 0 && Number(newItem.strip_size) > 1 && (
+                    <span className="text-blue-300">
+                      🏷️ MRP/tablet: <span className="text-white font-black">₹{(Number(newItem.mrp) / Number(newItem.strip_size)).toFixed(2)}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="flex flex-col md:flex-row items-stretch gap-3 mt-2">
                 <button onClick={handleAddItem} disabled={!newItem.product_name || !newItem.qty}
                   className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2">
                   <PlusCircle size={18} /> Add Item to GRN
