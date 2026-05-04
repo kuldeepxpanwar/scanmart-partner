@@ -10,6 +10,41 @@ const UNIT_LABELS: Record<SellUnit, string> = {
     piece: 'PC',
 };
 
+// ── Smart Pack Label: reads DB fields, falls back to name parsing ──
+const getPackLabel = (item: CartItem & { pack_volume?: number; volume_unit?: string }): string => {
+    // Tablets sold as strip
+    if (item.sell_unit === 'strip') return `${item.strip_size || 10} TAB`;
+    if (item.sell_unit === 'tablet') return 'TAB';
+    if (item.sell_unit === 'box') return `${item.pack_size || 1} BOX`;
+
+    // Piece/Syrup/Gel/Cream — use DB pack_volume if set
+    if (item.sell_unit === 'piece') {
+        const pv = (item as any).pack_volume;
+        const pu = ((item as any).volume_unit || '').toLowerCase();
+
+        if (pv && pv > 1 && pu) return `${pv} ${pu.toUpperCase()}`; // "100 ML" / "30 GM"
+        if (pv && pv > 1)       return `${pv}`;
+
+        // Fallback: parse name pattern "SYP-1*100" or "GEL-30 GM"
+        const name = item.name.toUpperCase();
+        const starMatch = name.match(/(\d+)\*(\d+)/);
+        if (starMatch) {
+            const vol = Number(starMatch[2]);
+            if (vol > 1) {
+                const unitGuess = /SYP|SYRUP|SOL|LIQ|SUS|DROP/.test(name) ? 'ML'
+                               : /GEL|CREAM|OINT|LOTION/.test(name) ? 'GM'
+                               : 'ML';
+                return `${vol} ${unitGuess}`;
+            }
+        }
+        // Last resort: detect unit from name keywords
+        if (/SYP|SYRUP|SOL|SUSP/.test(name)) return '1 ML';
+        if (/GEL|CREAM|OINT/.test(name))     return '1 GM';
+        return '1 PC';
+    }
+    return `${item.strip_size || 1} TAB`;
+};
+
 interface POSCartTableProps {
     cart: CartItem[];
     searchTerm: string;
@@ -139,10 +174,7 @@ export default function POSCartTable({ cart, searchTerm, updateQuantity, removeF
                                 {/* Pack Size / Unit */}
                                 <div className="col-span-1 flex flex-col items-center justify-center">
                                     <span className="text-[10px] font-black text-gray-600 uppercase">
-                                        {item.sell_unit === 'strip' ? `${item.strip_size || 10} TAB` : 
-                                         item.sell_unit === 'box' ? `${item.pack_size || 1} BOX` : 
-                                         item.sell_unit === 'piece' ? `1 ${item.name.toLowerCase().includes('syp') || item.name.toLowerCase().includes('ml') ? 'ML' : 'PC'}` : 
-                                         `${item.strip_size} TAB`}
+                                        {getPackLabel(item as any)}
                                     </span>
                                 </div>
                                 {/* MRP */}

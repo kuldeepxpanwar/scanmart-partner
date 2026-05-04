@@ -20,6 +20,9 @@ export interface CartItem {
     sell_unit: SellUnit;  // current selling unit for this cart item
     base_price: number;   // original price per strip from inventory
     base_mrp: number;     // original MRP per strip from inventory
+    // 🧪 Volume fields (syrups / gels)
+    pack_volume?: number;   // e.g. 100 (for 100ml)
+    volume_unit?: string;   // 'ml' | 'gm' | 'mg' | 'iu' | 'pc'
 }
 
 export interface HoldBill {

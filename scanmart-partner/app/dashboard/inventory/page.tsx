@@ -62,6 +62,9 @@ interface InventoryItem {
   pack_size?: number;
   strip_size?: number;
   sell_unit?: string;
+  // 🞓 Volume fields (syrups/gels)
+  pack_volume?: number;
+  volume_unit?: string;
   // 💊 Pharmacy fields
   hsn_code?: string;
   manufacturer?: string;
@@ -607,6 +610,8 @@ export default function InventoryPage() {
         pack_size: Number(editItem.pack_size) || 1,
         strip_size: Number(editItem.strip_size) || 1,
         sell_unit: editItem.sell_unit || 'strip',
+        pack_volume: editItem.pack_volume ? Number(editItem.pack_volume) : null,
+        volume_unit: editItem.volume_unit || null,
         is_h1: (editItem as any).is_h1 || false,
       })
       .eq("id", editItem.id);
@@ -2428,10 +2433,11 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              {/* 💊 Packaging: Pack Size + Strip Size */}
-              {(Number(editItem.pack_size) > 1 || Number(editItem.strip_size) > 1 || editItem.category === 'Tablet' || editItem.category === 'Capsule' || editItem.category === 'Pharmacy') && (
+              {/* 📦 Packaging: Tablets — Strip Size */}
+              {(editItem.sell_unit === 'strip' || editItem.sell_unit === 'box' || editItem.sell_unit === 'tablet' ||
+                editItem.category === 'Tablet' || editItem.category === 'Capsule') && (
                 <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 space-y-2">
-                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">📦 Packaging Details</p>
+                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">📦 Tablet Packaging</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-[9px] font-bold text-slate-500 uppercase">Strips/Box</label>
@@ -2455,11 +2461,11 @@ export default function InventoryPage() {
                       >
                         <option value="box">📦 Box</option>
                         <option value="strip">💊 Strip</option>
-                        <option value="tablet">💉 Tablet</option>
+                        <option value="tablet">💊 Tablet</option>
                       </select>
                     </div>
                   </div>
-                  {/* 💊 Boxes input → auto-convert */}
+                  {/* Boxes input → auto-convert */}
                   <div>
                     <label className="text-[9px] font-bold text-slate-500 uppercase">Boxes in Stock</label>
                     <div className="flex items-center gap-2">
@@ -2479,6 +2485,45 @@ export default function InventoryPage() {
                   </div>
                 </div>
               )}
+
+              {/* 🧪 Volume Packaging: Syrups / Gels / Creams */}
+              {(editItem.sell_unit === 'piece' ||
+                ['Syrup','Injection','Ointment','Cream','Drops','Pharmacy'].includes(editItem.category)) && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 space-y-2">
+                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">🧪 Liquid/Volume Packaging</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Pack Volume (ml/gm)</label>
+                      <input type="number" min="1" placeholder="e.g. 100"
+                        className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 text-blue-300 font-bold text-center outline-none focus:border-blue-500"
+                        value={(editItem as any).pack_volume || ''}
+                        onChange={(e) => setEditItem({ ...editItem, pack_volume: e.target.value })}
+                      />
+                      <p className="text-[8px] text-slate-500 mt-0.5">COUGHWILL SYP-1*100 → enter 100</p>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">Volume Unit</label>
+                      <select
+                        className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 text-blue-300 font-bold outline-none focus:border-blue-500 cursor-pointer"
+                        value={(editItem as any).volume_unit || 'ml'}
+                        onChange={(e) => setEditItem({ ...editItem, volume_unit: e.target.value })}
+                      >
+                        <option value="ml">ml (Syrup/Liquid)</option>
+                        <option value="gm">gm (Gel/Cream)</option>
+                        <option value="mg">mg (Tablet/Capsule)</option>
+                        <option value="iu">IU (Injection)</option>
+                        <option value="pc">PC (Piece)</option>
+                      </select>
+                    </div>
+                  </div>
+                  {(editItem as any).pack_volume > 1 && (
+                    <div className="bg-blue-500/10 rounded-lg p-2 text-center">
+                      <span className="text-[10px] font-black text-blue-300">PACK column dikhega: <span className="text-white">{(editItem as any).pack_volume} {((editItem as any).volume_unit || 'ml').toUpperCase()}</span></span>
+                    </div>
+                   )}
+                </div>
+              )}
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
