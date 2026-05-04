@@ -8,7 +8,7 @@ interface POSReceiptProps {
     storeSettings: any;
     paymentMethod: string;
     setShowReceipt: (val: boolean) => void;
-    printMode?: 'thermal' | 'a4'; // NEW
+    printMode?: 'thermal' | 'a4' | 'a5-pharmacy';
 }
 
 export default function POSReceipt({
@@ -22,9 +22,98 @@ export default function POSReceipt({
     const [timeLeft, setTimeLeft] = useState(60);
     const [pdfGenerating, setPdfGenerating] = useState(false);
     const isA4 = printMode === 'a4';
+    const isA5Pharmacy = printMode === 'a5-pharmacy';
+
+    // ── A5 Pharmacy PDF Generator ──
+    const generateA5PDF = async () => {
+        setPdfGenerating(true);
+        try {
+            const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'landscape' });
+            const W = 210; const H = 148;
+            const shop = storeSettings.shop_name || 'Medical Store';
+            const inv = lastSale.invoiceNumber || lastSale.id?.slice(0, 8) || '-';
+            const dl = storeSettings.drug_license || '';
+            const gstin = storeSettings.gstin || '';
+            let y = 8;
+
+            // Header left
+            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+            doc.text(shop.toUpperCase(), 6, y); y += 5;
+            doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+            if (storeSettings.shop_address) { doc.text(storeSettings.shop_address, 6, y); y += 4; }
+            if (storeSettings.shop_phone) { doc.text(`Ph: ${storeSettings.shop_phone}`, 6, y); y += 4; }
+            if (dl) { doc.text(`DL No: ${dl}`, 6, y); y += 4; }
+            if (gstin) { doc.text(`GSTIN: ${gstin}`, 6, y); }
+
+            // Header right
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+            doc.text('CASH MEMO / TAX INVOICE', W - 6, 8, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+            doc.text(`Invoice: ${inv}`, W - 6, 14, { align: 'right' });
+            doc.text(`Date: ${lastSale.date || ''}  Time: ${lastSale.time || ''}`, W - 6, 18, { align: 'right' });
+            if (lastSale.customer?.name) doc.text(`Patient: ${lastSale.customer.name}`, W - 6, 22, { align: 'right' });
+            if (lastSale.customer?.phone && lastSale.customer.phone !== 'N/A') doc.text(`Ph: ${lastSale.customer.phone}`, W - 6, 26, { align: 'right' });
+            if (lastSale.doctorName) doc.text(`Dr: ${lastSale.doctorName}`, W - 6, 30, { align: 'right' });
+
+            // Divider
+            y = 38; doc.setLineWidth(0.4); doc.line(6, y, W - 6, y); y += 4;
+
+            // Table header
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+            const cols = [6, 14, 90, 118, 132, 148, 162, 176, 192];
+            doc.text('#', cols[0], y); doc.text('MEDICINE', cols[1], y);
+            doc.text('BATCH', cols[2], y); doc.text('EXP', cols[3], y);
+            doc.text('MRP', cols[4], y, { align: 'right' }); doc.text('QTY', cols[5], y, { align: 'center' });
+            doc.text('RATE', cols[6], y, { align: 'right' }); doc.text('DIS%', cols[7], y, { align: 'center' }); doc.text('AMT', cols[8], y, { align: 'right' });
+            y += 3; doc.line(6, y, W - 6, y); y += 4;
+
+            // Items
+            doc.setFont('helvetica', 'normal');
+            lastSale.items.forEach((item: any, idx: number) => {
+                const lineTotal = Number(item.price) * item.quantity;
+                const name = item.name.length > 28 ? item.name.slice(0, 27) + '…' : item.name;
+                const batch = item.batch_number || item.batchNo || '-';
+                const exp = item.expiry_date ? item.expiry_date.slice(0, 7) : '-';
+                const mrp = item.mrp ? `${Number(item.mrp).toFixed(0)}` : '-';
+                const dis = item.discount_percent ? `${item.discount_percent}%` : '-';
+                doc.text(String(idx + 1), cols[0], y);
+                doc.text(name, cols[1], y);
+                doc.text(batch, cols[2], y);
+                doc.text(exp, cols[3], y);
+                doc.text(mrp, cols[4], y, { align: 'right' });
+                doc.text(String(item.quantity), cols[5], y, { align: 'center' });
+                doc.text(Number(item.price).toFixed(0), cols[6], y, { align: 'right' });
+                doc.text(dis, cols[7], y, { align: 'center' });
+                doc.text(lineTotal.toFixed(0), cols[8], y, { align: 'right' });
+                y += 5;
+            });
+
+            // Totals
+            doc.line(6, y, W - 6, y); y += 4;
+            if (totalGst > 0.01) {
+                doc.text(`Taxable: Rs ${totalTaxable.toFixed(2)}`, W - 60, y);
+                doc.text(`GST: Rs ${totalGst.toFixed(2)}`, W - 30, y); y += 4;
+            }
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+            doc.text(`TOTAL: Rs ${Math.round(lastSale.total)}`, W - 6, y, { align: 'right' }); y += 5;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
+            doc.text(`Payment: ${(lastSale.paymentMethod || 'CASH').toUpperCase()}`, W - 6, y, { align: 'right' }); y += 6;
+
+            // Disclaimer
+            doc.line(6, y, W - 6, y); y += 4;
+            doc.setFontSize(6.5);
+            doc.text('* Drugs once sold will not be taken back or exchanged.', 6, y); y += 4;
+            doc.text('* This bill is computer generated.', 6, y);
+            doc.text('Powered by ScanMart', W - 6, y, { align: 'right' });
+
+            doc.save(`PharmaBill-${inv}-${lastSale.date || 'today'}.pdf`);
+        } catch (e) { console.error(e); alert('PDF failed'); }
+        finally { setPdfGenerating(false); }
+    };
 
     // ── PDF Bill Generator (jsPDF) ──
     const generatePDF = async () => {
+        if (isA5Pharmacy) { generateA5PDF(); return; }
         setPdfGenerating(true);
         try {
             const doc = new jsPDF({ unit: 'mm', format: [80, 220], orientation: 'portrait' });
@@ -183,8 +272,11 @@ export default function POSReceipt({
 
             {/* ── PRINT MODE BADGE ── */}
             <div className="no-print mb-3 flex items-center gap-2">
-                <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest ${isA4 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-green-600/20 text-green-400 border border-green-500/30'}`}>
-                    {isA4 ? '📄 A4 Invoice Mode' : '🧾 Thermal 80mm Mode'}
+                <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest ${
+                    isA5Pharmacy ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+                    : isA4 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                    : 'bg-green-600/20 text-green-400 border border-green-500/30'}`}>
+                    {isA5Pharmacy ? '💊 A5 Pharmacy Bill' : isA4 ? '📄 A4 Invoice Mode' : '🧾 Thermal 80mm Mode'}
                 </span>
                 <span className="text-[9px] text-slate-500">Change in Settings → Hardware</span>
             </div>
@@ -192,10 +284,105 @@ export default function POSReceipt({
             {/* ════════════════════════════════════════
                 RECEIPT BOX — Thermal OR A4
             ════════════════════════════════════════ */}
-            <div className={isA4
-                ? "bg-white text-black w-full max-w-[595px] receipt-box-a4 shadow-2xl relative my-auto"
+            <div className={isA5Pharmacy
+                ? "bg-white text-black w-full max-w-[780px] receipt-box-a5 shadow-2xl relative my-auto text-[10px]"
+                : isA4 ? "bg-white text-black w-full max-w-[595px] receipt-box-a4 shadow-2xl relative my-auto"
                 : "bg-white text-black p-5 w-full max-w-[320px] receipt-box shadow-2xl relative text-[11px] my-auto"
             }>
+
+                {/* ── A5 PHARMACY LANDSCAPE LAYOUT ── */}
+                {isA5Pharmacy && (
+                  <div className="p-5 font-sans">
+                    {/* Header: Store left | Invoice right */}
+                    <div className="flex justify-between items-start border-b-2 border-gray-800 pb-3 mb-3">
+                      <div>
+                        <h1 className="text-lg font-black uppercase leading-tight tracking-wide">{storeSettings.shop_name}</h1>
+                        <p className="text-[9px] text-gray-500 mt-0.5">{storeSettings.shop_address}</p>
+                        <p className="text-[9px] text-gray-500">Ph: {storeSettings.shop_phone}</p>
+                        {storeSettings.drug_license && <p className="text-[9px] font-bold text-gray-700 mt-0.5">DL No: {storeSettings.drug_license}</p>}
+                        {storeSettings.gstin && <p className="text-[9px] font-bold text-gray-700">GSTIN: {storeSettings.gstin}</p>}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-gray-800 uppercase">Cash Memo / Tax Invoice</p>
+                        <p className="text-[9px] text-gray-500 mt-1">Invoice: <span className="font-black text-black">{lastSale.invoiceNumber || lastSale.id?.slice(0, 8)}</span></p>
+                        <p className="text-[9px] text-gray-500">Date: <span className="font-bold text-black">{lastSale.date}</span> &nbsp; Time: <span className="font-bold text-black">{lastSale.time}</span></p>
+                        {lastSale.customer?.name && <p className="text-[9px] text-gray-500">Patient: <span className="font-bold text-black">{lastSale.customer.name}</span></p>}
+                        {lastSale.customer?.phone && lastSale.customer.phone !== 'N/A' && <p className="text-[9px] text-gray-500">Ph: {lastSale.customer.phone}</p>}
+                        {lastSale.doctorName && <p className="text-[9px] text-gray-500">Ref. Dr: <span className="font-bold text-black">{lastSale.doctorName}</span></p>}
+                        <p className="text-[9px] text-gray-500">Cashier: <span className="font-bold text-black">{lastSale.staffName}</span></p>
+                      </div>
+                    </div>
+
+                    {/* Items Table */}
+                    <table className="w-full text-[9px] mb-3">
+                      <thead>
+                        <tr className="bg-gray-800 text-white">
+                          <th className="py-1.5 px-1.5 text-left rounded-tl">#</th>
+                          <th className="py-1.5 px-2 text-left">Medicine Name</th>
+                          <th className="py-1.5 px-1.5 text-center">Batch</th>
+                          <th className="py-1.5 px-1.5 text-center">Exp</th>
+                          <th className="py-1.5 px-1.5 text-right">MRP</th>
+                          <th className="py-1.5 px-1.5 text-center">Qty</th>
+                          <th className="py-1.5 px-1.5 text-right">Rate</th>
+                          <th className="py-1.5 px-1.5 text-center">Dis%</th>
+                          <th className="py-1.5 px-1.5 text-right rounded-tr">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lastSale.items.map((item: any, idx: number) => {
+                          const lineTotal = Number(item.price) * item.quantity;
+                          const gstRate = Number(item.gst_rate || 0);
+                          return (
+                            <tr key={item.id || idx} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                              <td className="py-1 px-1.5 text-gray-400">{idx + 1}</td>
+                              <td className="py-1 px-2">
+                                <div className="font-semibold">{item.name}</div>
+                                {gstRate > 0 && <div className="text-[8px] text-gray-400">GST {gstRate}%</div>}
+                              </td>
+                              <td className="py-1 px-1.5 text-center font-mono text-gray-600">{item.batch_number || item.batchNo || '—'}</td>
+                              <td className="py-1 px-1.5 text-center text-gray-600">{item.expiry_date ? item.expiry_date.slice(0,7) : '—'}</td>
+                              <td className="py-1 px-1.5 text-right text-gray-500">{item.mrp ? `₹${Number(item.mrp).toFixed(0)}` : '—'}</td>
+                              <td className="py-1 px-1.5 text-center font-bold">{item.quantity}</td>
+                              <td className="py-1 px-1.5 text-right">₹{Number(item.price).toFixed(0)}</td>
+                              <td className="py-1 px-1.5 text-center text-orange-600">{item.discount_percent ? `${item.discount_percent}%` : '—'}</td>
+                              <td className="py-1 px-1.5 text-right font-bold">₹{lineTotal.toFixed(0)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+                    {/* Totals + Footer row */}
+                    <div className="flex justify-between items-end gap-4">
+                      {/* Disclaimer left */}
+                      <div className="text-[8px] text-gray-400 max-w-[55%] leading-relaxed border-t border-dashed border-gray-300 pt-2">
+                        <p>* Drugs once sold will not be taken back or exchanged.</p>
+                        <p>* Check expiry before purchase. Keep out of reach of children.</p>
+                        {storeSettings.invoice_footer && <p className="mt-1">{storeSettings.invoice_footer}</p>}
+                        <p className="mt-1 text-gray-300">Powered by ScanMart</p>
+                      </div>
+                      {/* Totals right */}
+                      <div className="text-[9px] space-y-0.5 min-w-[180px] border-t border-gray-300 pt-2">
+                        {hasGst && <div className="flex justify-between text-gray-500"><span>Taxable Amount:</span><span>₹{totalTaxable.toFixed(2)}</span></div>}
+                        {hasGst && Object.entries(slabMap).map(([rate, val]) => (
+                          <div key={rate} className="flex justify-between text-gray-500">
+                            <span>GST @{rate}% (CGST {Number(rate)/2}%+SGST {Number(rate)/2}%):</span>
+                            <span>₹{val.tax.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        {lastSale.totalSavings > 0 && (
+                          <div className="flex justify-between text-green-600"><span>Discount:</span><span>-₹{lastSale.totalSavings.toFixed(2)}</span></div>
+                        )}
+                        <div className="flex justify-between font-black text-sm border-t-2 border-gray-800 pt-1 mt-1">
+                          <span>TOTAL</span><span>₹{Math.round(lastSale.total)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-500">
+                          <span>Payment:</span><span className="font-bold uppercase">{lastSale.paymentMethod}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* ── A4 HEADER ── */}
                 {isA4 ? (
@@ -436,7 +623,11 @@ export default function POSReceipt({
         @media print {
           body * { visibility: hidden; }
           .no-print { display: none !important; }
-          ${isA4 ? `
+          ${isA5Pharmacy ? `
+          .receipt-box-a5, .receipt-box-a5 * { visibility: visible; }
+          .receipt-box-a5 { position: fixed; left: 0; top: 0; width: 210mm; padding: 6mm; box-shadow: none; font-family: Arial, sans-serif; font-size: 8pt; background: white; color: black; }
+          @page { size: A5 landscape; margin: 4mm; }
+          ` : isA4 ? `
           .receipt-box-a4, .receipt-box-a4 * { visibility: visible; }
           .receipt-box-a4 { position: fixed; left: 50%; top: 20mm; transform: translateX(-50%); width: 170mm; padding: 12mm; box-shadow: none; font-family: Arial, sans-serif; font-size: 11pt; background: white; color: black; }
           @page { size: A4; margin: 15mm; }

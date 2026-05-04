@@ -53,6 +53,7 @@ export default function SettingsPage() {
         upi_id: "",
         razorpay_key_id: "",
         razorpay_key_secret: "",
+        drug_license: "",
     });
     const [showRazorpaySecret, setShowRazorpaySecret] = useState(false);
 
@@ -103,6 +104,7 @@ export default function SettingsPage() {
                 upi_id: settingData.upi_id || "",
                 razorpay_key_id: settingData.razorpay_key_id || "",
                 razorpay_key_secret: settingData.razorpay_key_secret || "",
+                drug_license: settingData.drug_license || "",
             });
         }
 
@@ -442,6 +444,20 @@ export default function SettingsPage() {
                             <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase ml-2">GSTIN</label><input type="text" value={settings.gstin} onChange={(e) => setSettings({ ...settings, gstin: e.target.value })} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-white text-sm font-mono uppercase outline-none focus:border-blue-500 transition-all" /></div>
                         </div>
 
+                        {/* 💊 Drug License Number */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-purple-400 uppercase ml-2 flex items-center gap-1">
+                                💊 Drug License No. <span className="text-slate-600 normal-case font-normal">(Pharmacy only — prints on bill)</span>
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="e.g. RJ-DL-123456 / 20B-12345"
+                                value={settings.drug_license}
+                                onChange={(e) => setSettings({ ...settings, drug_license: e.target.value })}
+                                className="w-full bg-slate-950 border border-purple-500/30 p-4 rounded-xl text-purple-300 font-mono text-sm outline-none focus:border-purple-500 transition-all"
+                            />
+                        </div>
+
                         {/* 🔥 UPI ID FIELD */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-slate-500 uppercase ml-2 flex items-center gap-1">
@@ -488,10 +504,11 @@ export default function SettingsPage() {
                         {/* Paper Type Toggle — NEW */}
                         <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 col-span-1 md:col-span-2">
                             <p className="text-[10px] text-slate-500 font-bold uppercase mb-3">Paper / Receipt Type</p>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-3 gap-3">
                                 {[
                                     { val: 'thermal', label: '🧾 Thermal 80mm', desc: 'Small receipt (dukaan standard)', color: 'green' },
                                     { val: 'a4', label: '📄 A4 Invoice', desc: 'Full GST invoice (A4 paper)', color: 'blue' },
+                                    { val: 'a5-pharmacy', label: '💊 A5 Pharmacy', desc: 'Landscape bill (14.8x21cm)', color: 'purple' },
                                 ].map(({ val, label, desc, color }) => {
                                     const savedMode = typeof window !== 'undefined' ? localStorage.getItem('printMode') || 'thermal' : 'thermal';
                                     const isActive = savedMode === val;
@@ -500,19 +517,20 @@ export default function SettingsPage() {
                                             key={val}
                                             onClick={() => {
                                                 if (typeof window !== 'undefined') localStorage.setItem('printMode', val);
-                                                // Force re-render by toggling a dummy state
-                                                setPrinterType(prev => prev); // triggers re-render
+                                                setPrinterType(prev => prev);
                                             }}
                                             className={`p-4 rounded-xl border-2 text-left transition-all ${isActive
                                                 ? color === 'green'
                                                     ? 'border-green-500 bg-green-500/10'
+                                                    : color === 'purple'
+                                                    ? 'border-purple-500 bg-purple-500/10'
                                                     : 'border-blue-500 bg-blue-500/10'
                                                 : 'border-slate-700 bg-slate-900 hover:border-slate-600'
                                                 }`}
                                         >
-                                            <p className={`text-sm font-black ${isActive ? color === 'green' ? 'text-green-400' : 'text-blue-400' : 'text-white'}`}>{label}</p>
+                                            <p className={`text-sm font-black ${isActive ? color === 'green' ? 'text-green-400' : color === 'purple' ? 'text-purple-400' : 'text-blue-400' : 'text-white'}`}>{label}</p>
                                             <p className="text-[10px] text-slate-500 mt-0.5">{desc}</p>
-                                            {isActive && <p className={`text-[9px] font-bold mt-1 ${color === 'green' ? 'text-green-500' : 'text-blue-500'}`}>✓ Active</p>}
+                                            {isActive && <p className={`text-[9px] font-bold mt-1 ${color === 'green' ? 'text-green-500' : color === 'purple' ? 'text-purple-500' : 'text-blue-500'}`}>✓ Active</p>}
                                         </button>
                                     );
                                 })}
