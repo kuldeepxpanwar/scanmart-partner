@@ -182,34 +182,49 @@ export default function POSReceipt({
         }
     };
 
-    // ── WhatsApp Share (rich formatted text) ──
+    // ── WhatsApp Share (Phase 5 — Pharmacy Format) ──
     const handleWhatsAppShare = () => {
         const shop = storeSettings.shop_name || 'Our Store';
         const inv = lastSale.invoiceNumber || lastSale.id?.slice(0, 8) || '-';
         const customerName = lastSale.customer?.name || 'Guest';
         const payment = (lastSale.paymentMethod || 'CASH').toUpperCase();
+        const dl = storeSettings.drug_license || '';
+        const isPharmacy = lastSale.items?.some((i: any) => Number(i.strip_size) > 1 || i.batch_number || i.expiry_date);
 
-        let msg = `🧾 *${shop}*\n`;
+        let msg = `💊 *${shop}*\n`;
         if (storeSettings.shop_address) msg += `📍 ${storeSettings.shop_address}\n`;
         if (storeSettings.shop_phone) msg += `📞 ${storeSettings.shop_phone}\n`;
+        if (dl) msg += `DL No: ${dl}\n`;
         if (storeSettings.gstin) msg += `GSTIN: ${storeSettings.gstin}\n`;
-        msg += `\n*Invoice:* ${inv}  |  *Date:* ${lastSale.date || ''} ${lastSale.time || ''}\n`;
-        msg += `*Customer:* ${customerName}  |  *Payment:* ${payment}\n`;
-        msg += `\n*─────────────────────*\n`;
-        msg += `*Item               Qty   Amt*\n`;
-        msg += `*─────────────────────*\n`;
-        lastSale.items.forEach((item: any) => {
+        msg += `\n🧾 *Invoice:* ${inv}\n`;
+        msg += `📅 *Date:* ${lastSale.date || ''} ${lastSale.time || ''}\n`;
+        msg += `👤 *Patient:* ${customerName}\n`;
+        if (lastSale.doctorName) msg += `👨‍⚕️ *Ref. Dr:* ${lastSale.doctorName}\n`;
+        msg += `💳 *Payment:* ${payment}\n`;
+        msg += `\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        lastSale.items.forEach((item: any, idx: number) => {
             const lineTotal = (Number(item.price) * item.quantity).toFixed(0);
-            const name = item.name.length > 18 ? item.name.slice(0, 17) + '…' : item.name.padEnd(18);
-            msg += `${name} x${item.quantity}   ₹${lineTotal}\n`;
+            const ss = Number(item.strip_size) || 1;
+            const qtyLabel = ss > 1
+                ? `${item.quantity} strips (${item.quantity * ss} tabs)`
+                : `${item.quantity} pcs`;
+            const mrpLabel = item.mrp ? ` | MRP ₹${Number(item.mrp).toFixed(0)}` : '';
+            const batchLabel = item.batch_number ? `\n   📦 Batch: ${item.batch_number}` : '';
+            const expLabel = item.expiry_date ? ` | Exp: ${item.expiry_date.slice(0, 7)}` : '';
+            msg += `*${idx + 1}. ${item.name}*\n`;
+            msg += `   Qty: ${qtyLabel} | Rate: ₹${Number(item.price).toFixed(0)}${mrpLabel} | Amt: ₹${lineTotal}`;
+            msg += `${batchLabel}${expLabel}\n`;
         });
-        msg += `*─────────────────────*\n`;
-        if (lastSale.totalSavings > 0) msg += `💚 Discount: -₹${lastSale.totalSavings.toFixed(0)}\n`;
+
+        msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        if (lastSale.totalSavings > 0) msg += `💚 *Discount:* -₹${lastSale.totalSavings.toFixed(0)}\n`;
+        if (totalGst > 0.01) msg += `🧮 *GST Included:* ₹${totalGst.toFixed(2)}\n`;
         msg += `\n💰 *TOTAL: ₹${Math.round(lastSale.total)}*\n`;
         if (lastSale.paymentMethod === 'split') {
             msg += `   💵 Cash: ₹${Math.round(lastSale.splitCash || 0)} | 📱 UPI: ₹${Math.round(lastSale.splitUpi || 0)}\n`;
         }
-        msg += `\n`;
+        msg += `\n_* Drugs once sold will not be taken back._\n`;
         if (storeSettings.invoice_footer) msg += `_${storeSettings.invoice_footer}_\n`;
         msg += `_Powered by ScanMart_ 🚀`;
 
@@ -220,6 +235,7 @@ export default function POSReceipt({
         const url = waPhone ? `https://wa.me/${waPhone}?text=${text}` : `https://wa.me/?text=${text}`;
         window.open(url, '_blank');
     };
+
 
     const refreshQR = () => {
         const newRef = "SM" + Math.random().toString(36).substring(2, 9).toUpperCase();
@@ -437,7 +453,19 @@ export default function POSReceipt({
                                         <tr key={item.id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                             <td className="py-1.5 px-3 text-gray-400">{idx + 1}</td>
                                             <td className="py-1.5 px-3 font-medium">{item.name}</td>
-                                            <td className="py-1.5 px-2 text-center">{item.quantity}</td>
+                                            <td className="py-1.5 px-2 text-center">
+                                              {(() => {
+                                                const ss = Number(item.strip_size) || 1;
+                                                if (ss > 1) return (
+                                                  <div>
+                                                    <div className="font-bold">{item.quantity}</div>
+                                                    <div className="text-[8px] text-gray-400">strips</div>
+                                                    <div className="text-[8px] text-purple-500">{item.quantity * ss} tabs</div>
+                                                  </div>
+                                                );
+                                                return <span>{item.quantity}</span>;
+                                              })()}
+                                            </td>
                                             <td className="py-1.5 px-2 text-right">₹{Number(item.price).toFixed(2)}</td>
                                             <td className="py-1.5 px-2 text-center text-gray-500">{gstRate > 0 ? `${gstRate}%` : '-'}</td>
                                             <td className="py-1.5 px-3 text-right font-bold">₹{lineTotal.toFixed(2)}</td>
@@ -532,7 +560,18 @@ export default function POSReceipt({
                                                 <div className="truncate">{item.name}</div>
                                                 {gstRate > 0 && <div className="text-[8px] text-gray-400">GST {gstRate}% (₹{gstLine.toFixed(2)})</div>}
                                             </td>
-                                            <td className="text-center align-top pt-0.5">{item.quantity}</td>
+                                            <td className="text-center align-top pt-0.5">
+                                              {(() => {
+                                                const ss = Number(item.strip_size) || 1;
+                                                if (ss > 1) return (
+                                                  <div className="leading-tight">
+                                                    <div>{item.quantity}</div>
+                                                    <div className="text-[7px] text-purple-500">{item.quantity * ss}t</div>
+                                                  </div>
+                                                );
+                                                return item.quantity;
+                                              })()}
+                                            </td>
                                             <td className="text-right align-top pt-0.5">{Number(item.price).toFixed(0)}</td>
                                             <td className="text-right font-bold align-top pt-0.5">{lineTotal.toFixed(0)}</td>
                                         </tr>
