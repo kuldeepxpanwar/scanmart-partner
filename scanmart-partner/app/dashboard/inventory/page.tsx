@@ -35,6 +35,7 @@ import autoTable from "jspdf-autotable";
 import Paginator from "@/components/Paginator";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import { useApp } from "@/lib/AppContext";
+import { div } from "framer-motion/client";
 
 const INV_PAGE_SIZE = 20;
 
@@ -279,6 +280,21 @@ export default function InventoryPage() {
 
   // Reset page on search or filter change
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterType, showArchived]);
+
+  // --- ⌨️ GLOBAL KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEditOpen) return;
+      if (e.key === 'Escape') {
+        setIsEditOpen(false);
+      } else if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('btn-update-item')?.click();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditOpen]);
 
   const fetchStoresFirst = async () => {
     // 🔥 BUG FIX: Always scope by owner_id — never pull a random store from DB
@@ -564,7 +580,7 @@ export default function InventoryPage() {
     }
 
     setIsAddOpen(false); resetForm(); fetchData();
-    toast.success(`✅ Added! Stock: ${totalStock} ${newItem.sell_unit === 'strip' ? `tabs (${Math.floor(totalStock/stripSize)} strips)` : 'units'}`);
+    toast.success(`✅ Added! Stock: ${totalStock} ${newItem.sell_unit === 'strip' ? `tabs (${Math.floor(totalStock / stripSize)} strips)` : 'units'}`);
   };
 
   const resetForm = () => {
@@ -583,7 +599,7 @@ export default function InventoryPage() {
   // --- 🔵 EDIT PRODUCT ---
   const handleUpdateItem = async () => {
     if (!editItem || !editItem.id) return;
-    
+
     const variantLabel = ((editItem as any)._variant_label || '').trim().toUpperCase();
     const finalName = variantLabel
       ? `${editItem.name.trim()}-${variantLabel}`
@@ -1240,12 +1256,12 @@ export default function InventoryPage() {
                   {reorderList.map((p, i) => {
                     const urgency = p.daysRemaining <= 0 ? 'OUT'
                       : p.daysRemaining <= 5 ? 'CRITICAL'
-                      : p.daysRemaining <= 10 ? 'HIGH'
-                      : 'MEDIUM';
+                        : p.daysRemaining <= 10 ? 'HIGH'
+                          : 'MEDIUM';
                     const urgencyStyle = urgency === 'OUT' ? 'bg-red-600 text-white'
                       : urgency === 'CRITICAL' ? 'bg-red-500 text-white'
-                      : urgency === 'HIGH' ? 'bg-orange-500 text-white'
-                      : 'bg-yellow-500 text-black';
+                        : urgency === 'HIGH' ? 'bg-orange-500 text-white'
+                          : 'bg-yellow-500 text-black';
                     return (
                       <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/20">
                         <td className="px-4 py-3">
@@ -1314,15 +1330,14 @@ export default function InventoryPage() {
               <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1">
                 {(['expired', '30', '60', '90', 'all'] as const).map(f => (
                   <button key={f} onClick={() => setExpiryFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
-                      expiryFilter === f
-                        ? f === 'expired' ? 'bg-red-600 text-white'
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${expiryFilter === f
+                      ? f === 'expired' ? 'bg-red-600 text-white'
                         : f === '30' ? 'bg-red-500 text-white'
-                        : f === '60' ? 'bg-orange-500 text-white'
-                        : f === '90' ? 'bg-yellow-500 text-black'
-                        : 'bg-slate-700 text-white'
-                        : 'text-slate-500 hover:text-white'
-                    }`}>
+                          : f === '60' ? 'bg-orange-500 text-white'
+                            : f === '90' ? 'bg-yellow-500 text-black'
+                              : 'bg-slate-700 text-white'
+                      : 'text-slate-500 hover:text-white'
+                      }`}>
                     {f === 'expired' ? '🚨 Expired' : f === 'all' ? 'All Batches' : `≤${f} Days`}
                   </button>
                 ))}
@@ -1488,7 +1503,15 @@ export default function InventoryPage() {
                   const margin = item.price - item.buying_price;
 
                   return (
-                    <tr key={item.id} className="border-b border-slate-800 hover:bg-slate-800/40 transition-all group">
+                    <tr key={item.id} tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'F2' && !showArchived) {
+                          e.preventDefault();
+                          setEditItem({ ...item, _variant_label: '' });
+                          setIsEditOpen(true);
+                        }
+                      }}
+                      className="border-b border-slate-800 hover:bg-slate-800/40 transition-all group outline-none focus:bg-slate-800/60 focus:border-blue-500">
                       <td className="p-5 flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 relative">
                           {item.image ? <img src={item.image} className={`w-full h-full object-cover ${showArchived ? 'opacity-50 grayscale' : ''}`} /> : <ImageIcon className="text-slate-600" size={20} />}
@@ -1539,7 +1562,7 @@ export default function InventoryPage() {
                             <>
                               <button onClick={() => openBatchManager(item)} className="p-2 bg-slate-800 hover:bg-orange-600 text-slate-400 hover:text-orange-300 rounded-lg transition-all" title="Manage Batches"><PackagePlus size={14} /></button>
                               <button onClick={() => { setTransferData({ ...transferData, product_id: item.id }); setIsTransferOpen(true); }} className="p-2 bg-slate-800 hover:bg-purple-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Transfer Stock"><ArrowRightLeft size={14} /></button>
-                              <button onClick={() => { setEditItem(item); setIsEditOpen(true); }} className="p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all"><Edit3 size={14} /></button>
+                              <button onClick={() => { setEditItem({ ...item, _variant_label: '' }); setIsEditOpen(true); }} className="p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all"><Edit3 size={14} /></button>
                               <button onClick={() => handleDeleteItem(item.id)} className="p-2 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all"><Trash2 size={14} /></button>
                             </>
                           )}
@@ -1789,9 +1812,9 @@ export default function InventoryPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl my-6">
             <div className="flex justify-between items-center p-6 border-b border-slate-800">
               <h2 className="text-xl font-black uppercase italic flex items-center gap-2 text-blue-400">
-                <PackagePlus size={20}/> Add Medicine
+                <PackagePlus size={20} /> Add Medicine
               </h2>
-              <button onClick={() => { setIsAddOpen(false); resetForm(); }} className="bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={20}/></button>
+              <button onClick={() => { setIsAddOpen(false); resetForm(); }} className="bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={20} /></button>
             </div>
             <div className="p-6 space-y-4">
               {/* Name + Variant — combined preview */}
@@ -1810,7 +1833,7 @@ export default function InventoryPage() {
                     <input type="text" placeholder="30 GM"
                       className="w-28 bg-slate-800 p-3 rounded-xl border border-orange-500/40 outline-none focus:border-orange-500 font-bold text-orange-300 placeholder-slate-600 text-center"
                       value={(newItem as any).variant_label || ''}
-                      onChange={(e) => setNewItem({ ...newItem, ...(({variant_label: e.target.value}) as any) })}
+                      onChange={(e) => setNewItem({ ...newItem, ...(({ variant_label: e.target.value }) as any) })}
                     />
                   </div>
                 </div>
@@ -1860,7 +1883,7 @@ export default function InventoryPage() {
                   />
                 </div>
               </div>
-              
+
               {/* Schedule H/H1 Checkbox */}
               <label className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl cursor-pointer hover:bg-red-500/20 transition-colors">
                 <input type="checkbox" className="w-5 h-5 accent-red-500"
@@ -2051,7 +2074,7 @@ export default function InventoryPage() {
                       <table className="w-full text-[9px] text-slate-400">
                         <thead className="text-green-400 border-b border-slate-800">
                           <tr>
-                            {['product_name','hsn','qty','qty_free','batch_no','expiry','mrp','rate','discount','sgst','cgst','supplier_name'].map(h => (
+                            {['product_name', 'hsn', 'qty', 'qty_free', 'batch_no', 'expiry', 'mrp', 'rate', 'discount', 'sgst', 'cgst', 'supplier_name'].map(h => (
                               <th key={h} className="py-1 pr-2 text-left font-bold">{h}</th>
                             ))}
                           </tr>
@@ -2257,23 +2280,23 @@ export default function InventoryPage() {
                               const isHighDiff = existing && rateDiff > 10;
                               const isNew = !existing;
                               return (
-                              <tr key={i} className={`border-t border-slate-800 hover:bg-slate-800/30 ${isHighDiff ? 'bg-red-500/10' : ''}`}>
-                                <td className="px-3 py-2 font-bold text-white max-w-[180px] truncate">
-                                  {row.product_name}
-                                  {isNew && <span className="ml-1 text-[8px] bg-blue-500/20 text-blue-400 font-black px-1 rounded">NEW</span>}
-                                  {isHighDiff && <span className="ml-1 text-[8px] bg-red-500/20 text-red-400 font-black px-1 rounded">⚠ RATE</span>}
-                                </td>
-                                <td className="px-3 py-2 text-center text-slate-400">{row.qty}</td>
-                                <td className="px-3 py-2 text-center text-green-400 font-bold">+{row.qty_free}</td>
-                                <td className="px-3 py-2 text-center font-black text-green-300">{row.total_stock}</td>
-                                <td className="px-3 py-2 text-slate-400 font-mono">{row.batch_no || '-'}</td>
-                                <td className="px-3 py-2 text-orange-400">{row.expiry_raw || '-'}</td>
-                                <td className="px-3 py-2 text-right text-white">₹{row.mrp}</td>
-                                <td className={`px-3 py-2 text-right font-bold ${isHighDiff ? 'text-red-400' : 'text-blue-400'}`}>
-                                  ₹{row.effective_cost}
-                                  {isHighDiff && <div className="text-[8px] text-red-300">was ₹{existing!.buying_price}</div>}
-                                </td>
-                              </tr>
+                                <tr key={i} className={`border-t border-slate-800 hover:bg-slate-800/30 ${isHighDiff ? 'bg-red-500/10' : ''}`}>
+                                  <td className="px-3 py-2 font-bold text-white max-w-[180px] truncate">
+                                    {row.product_name}
+                                    {isNew && <span className="ml-1 text-[8px] bg-blue-500/20 text-blue-400 font-black px-1 rounded">NEW</span>}
+                                    {isHighDiff && <span className="ml-1 text-[8px] bg-red-500/20 text-red-400 font-black px-1 rounded">⚠ RATE</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-center text-slate-400">{row.qty}</td>
+                                  <td className="px-3 py-2 text-center text-green-400 font-bold">+{row.qty_free}</td>
+                                  <td className="px-3 py-2 text-center font-black text-green-300">{row.total_stock}</td>
+                                  <td className="px-3 py-2 text-slate-400 font-mono">{row.batch_no || '-'}</td>
+                                  <td className="px-3 py-2 text-orange-400">{row.expiry_raw || '-'}</td>
+                                  <td className="px-3 py-2 text-right text-white">₹{row.mrp}</td>
+                                  <td className={`px-3 py-2 text-right font-bold ${isHighDiff ? 'text-red-400' : 'text-blue-400'}`}>
+                                    ₹{row.effective_cost}
+                                    {isHighDiff && <div className="text-[8px] text-red-300">was ₹{existing!.buying_price}</div>}
+                                  </td>
+                                </tr>
                               );
                             })}
                           </tbody>
@@ -2301,441 +2324,471 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* 🔵 EDIT MODAL (Updated with Supplier) */}
-      {isEditOpen && editItem && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h2 className="text-2xl font-bold mb-2 italic text-yellow-500">Edit <span className="text-white">Product</span></h2>
-            {/* 💊 Unit Clarity Banner */}
-            {(() => {
-              const ss = Number(editItem.strip_size) || 1;
-              const st = Number(editItem.stock) || 0;
-              if (ss <= 1) return (
-                <div className="mb-4 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 flex items-center gap-3 text-[10px] font-bold">
-                  <span className="text-slate-400">📦 Stock:</span>
-                  <span className="text-white font-black">{st} pieces</span>
-                  <span className="text-slate-500 ml-auto">sell_unit: {editItem.sell_unit || 'piece'}</span>
+      {isEditOpen && editItem && (() => {
+        const ss = Number(editItem.strip_size) || 1;
+        const st = Number(editItem.stock) || 0;
+        const strips = Math.floor(st / ss);
+        const loose = st % ss;
+        const isTablet = ss > 1 || ['Tablet', 'Capsule'].includes(editItem.category);
+        const isLiquid = ['Syrup', 'Injection', 'Ointment', 'Cream', 'Drops'].includes(editItem.category) || editItem.sell_unit === 'piece';
+        // Unified per-strip buying price for display
+        const buyPerStrip = isTablet ? (Number(editItem.buying_price) || 0) * ss : (Number(editItem.buying_price) || 0);
+        const sellPrice = Number(editItem.price) || 0;
+        const mrpPrice = Number(editItem.mrp) || 0;
+        const marginAmt = sellPrice - (buyPerStrip);
+        const marginPct = sellPrice > 0 ? (marginAmt / sellPrice) * 100 : 0;
+        return (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+
+              {/* ── Header ── */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950 shrink-0">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-black italic text-yellow-400">Edit <span className="text-white">Product</span></h2>
+                  {/* Stock badge */}
+                  {isTablet ? (
+                    <div className="flex items-center gap-2 bg-purple-900/30 border border-purple-500/30 rounded-xl px-3 py-1.5 text-[10px] font-bold">
+                      <span className="text-purple-300">💊 Stock:</span>
+                      <span className="text-white font-black">{st} tablets</span>
+                      <span className="text-purple-400">= {strips} strips{loose > 0 ? ` + ${loose} loose` : ''}</span>
+                      <span className="text-slate-500 border-l border-slate-700 pl-2">{ss} tabs/strip</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-[10px] font-bold">
+                      <span className="text-slate-400">📦 Stock:</span>
+                      <span className="text-white font-black">{st} pcs</span>
+                    </div>
+                  )}
                 </div>
-              );
-              const strips = Math.floor(st / ss);
-              const loose = st % ss;
-              return (
-                <div className="mb-4 bg-purple-900/20 border border-purple-500/30 rounded-xl px-4 py-2.5 flex flex-wrap gap-3 text-[10px] font-bold">
-                  <span className="text-purple-300">💊 Stock:</span>
-                  <span className="text-white font-black">{st} tablets</span>
-                  <span className="text-purple-400">= {strips} strips{loose > 0 ? ` + ${loose} loose` : ''}</span>
-                  <span className="text-slate-500 ml-auto">{ss} tabs/strip</span>
-                </div>
-              );
-            })()}
-            <div className="space-y-4">
-              <div className="flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">Base Name (Generic)</label>
-                  <input type="text" placeholder="e.g. CHYMERA GEL"
-                    className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 font-bold placeholder-slate-600"
-                    value={editItem.name || ""} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-orange-400 mb-1 block">Size / Variant</label>
-                  <input type="text" placeholder="30 GM"
-                    className="w-28 bg-slate-800 p-3 rounded-xl border border-orange-500/40 outline-none focus:border-orange-500 font-bold text-orange-300 placeholder-slate-600 text-center"
-                    value={(editItem as any)._variant_label || ''}
-                    onChange={(e) => setEditItem({ ...editItem, _variant_label: e.target.value } as any)}
-                  />
-                </div>
+                <button onClick={() => setIsEditOpen(false)} className="text-slate-500 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-all">✕</button>
               </div>
 
-              {/* Live Preview for Edit Product if Variant is added */}
-              {(editItem as any)._variant_label && (
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
-                  <span className="text-[9px] text-slate-500 font-bold uppercase">Saved as:</span>
-                  <span className="text-blue-300 font-black text-sm">
-                    {editItem.name.trim()}-{((editItem as any)._variant_label || '').trim().toUpperCase()}
-                  </span>
-                  <span className="text-[9px] text-green-400 ml-auto">separate stock</span>
-                </div>
-              )}
+              {/* ── Two-Panel Body ── */}
+              <div className="flex flex-1 overflow-hidden">
 
-              <div className="relative">
-                <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                <input type="text" placeholder="Barcode" className="w-full bg-slate-800 p-3 pl-10 rounded-xl border border-slate-700 outline-none font-mono" value={editItem.barcode || ""} onChange={(e) => setEditItem({ ...editItem, barcode: e.target.value })} />
-              </div>
+                {/* ══ LEFT PANEL — Identity ══ */}
+                <div className="w-[42%] border-r border-slate-800 overflow-y-auto p-5 space-y-3 bg-slate-900/50 shrink-0">
+                  <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Identity</p>
 
-              {/* Category — with auto pack defaults */}
-              <div>
-                <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 block">Category</label>
-                <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer"
-                  value={editItem.category || 'General'}
-                  onChange={e => {
-                    const cat = e.target.value;
-                    const d = CATEGORY_PACKAGING[cat] || CATEGORY_PACKAGING['General'];
-                    setEditItem({
-                      ...editItem, category: cat,
-                      pack_size: editItem.pack_size || String(d.pack_size),
-                      strip_size: editItem.strip_size || String(d.strip_size),
-                      sell_unit: editItem.sell_unit || d.sell_unit,
-                    });
-                  }}>
-                  {Object.keys(CATEGORY_PACKAGING).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-
-              {/* Schedule H/H1 Checkbox */}
-              <label className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl cursor-pointer hover:bg-red-500/20 transition-colors">
-                <input type="checkbox" className="w-5 h-5 accent-red-500"
-                  checked={(editItem as any).is_h1 || false}
-                  onChange={e => setEditItem({ ...editItem, is_h1: e.target.checked } as any)}
-                />
-                <div>
-                  <p className="text-sm font-bold text-red-400">Schedule H / H1 Drug</p>
-                  <p className="text-[10px] text-red-400/70 leading-tight">Requires Doctor/Patient details during POS billing</p>
-                </div>
-              </label>
-
-              {/* 🔑 HSN Code */}
-              <div>
-                <label className="text-[10px] font-bold uppercase text-purple-400 mb-1 flex items-center gap-1">
-                  <span>#</span> HSN Code
-                  {!editItem.hsn_code && <span className="text-amber-400 text-[9px] ml-1">(not set — required for GST)</span>}
-                </label>
-                <input type="text" inputMode="numeric" placeholder="e.g. 3004, 300494, 3004060"
-                  className="w-full bg-slate-800 p-3 rounded-xl border border-purple-500/30 outline-none focus:border-purple-500 font-mono text-purple-300 placeholder-slate-600"
-                  value={editItem.hsn_code || ""} onChange={(e) => setEditItem({ ...editItem, hsn_code: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Composition / Salt</label>
-                  <input type="text" placeholder="e.g. Paracetamol 500mg" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.composition || ""} onChange={(e) => setEditItem({ ...editItem, composition: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Rack / Shelf Location</label>
-                  <input type="text" placeholder="e.g. Rack A, Shelf 3" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 transition-all text-blue-100 placeholder-blue-900/50" value={editItem.location || ""} onChange={(e) => setEditItem({ ...editItem, location: e.target.value })} />
-                </div>
-              </div>
-
-              {/* Manufacturer + Reorder Level */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Manufacturer</label>
-                  <input type="text" placeholder="e.g. Cipla"
-                    className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600"
-                    value={editItem.manufacturer || ""} onChange={e => setEditItem({ ...editItem, manufacturer: e.target.value })}/>
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Reorder Level</label>
-                  <input type="number" min="0" placeholder="10"
-                    className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-slate-300 font-bold text-center"
-                    value={editItem.reorder_level || "10"} onChange={e => setEditItem({ ...editItem, reorder_level: e.target.value })}/>
-                </div>
-              </div>
-
-              {/* 📦 Packaging: Tablets — Strip Size */}
-              {(editItem.sell_unit === 'strip' || editItem.sell_unit === 'box' || editItem.sell_unit === 'tablet' ||
-                editItem.category === 'Tablet' || editItem.category === 'Capsule') && (
-                <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 space-y-2">
-                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">📦 Tablet Packaging</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Strips/Box</label>
-                      <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500"
-                        value={editItem.pack_size || 1}
-                        onChange={(e) => setEditItem({ ...editItem, pack_size: e.target.value })}
+                  {/* Name + Variant */}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">Product Name</label>
+                      <input type="text" tabIndex={1} autoFocus
+                        className="w-full bg-slate-800 p-2.5 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 font-bold text-sm placeholder-slate-600 transition-all"
+                        value={editItem.name || ''} onChange={e => setEditItem({ ...editItem, name: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Tabs/Strip</label>
-                      <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500"
-                        value={editItem.strip_size || 1}
-                        onChange={(e) => setEditItem({ ...editItem, strip_size: e.target.value })}
+                      <label className="text-[9px] font-bold uppercase text-orange-400 mb-1 block">Variant</label>
+                      <input type="text" placeholder="e.g. 30 GM" tabIndex={2}
+                        className="w-24 bg-slate-800 p-2.5 rounded-xl border border-orange-500/30 outline-none focus:border-orange-500 font-bold text-orange-300 text-center text-sm placeholder-slate-600 transition-all"
+                        value={(editItem as any)._variant_label || ''}
+                        onChange={e => setEditItem({ ...editItem, _variant_label: e.target.value } as any)}
                       />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Sell As</label>
-                      <select className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold outline-none focus:border-purple-500 cursor-pointer"
-                        value={editItem.sell_unit || 'strip'}
-                        onChange={(e) => setEditItem({ ...editItem, sell_unit: e.target.value })}
-                      >
-                        <option value="box">📦 Box</option>
-                        <option value="strip">💊 Strip</option>
-                        <option value="tablet">💊 Tablet</option>
-                      </select>
                     </div>
                   </div>
-                  {/* Boxes input → auto-convert */}
+                  {(editItem as any)._variant_label && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-1.5 text-[9px] font-bold flex items-center gap-2">
+                      <span className="text-slate-500">Saved as:</span>
+                      <span className="text-blue-300">{editItem.name.trim()}-{((editItem as any)._variant_label || '').trim().toUpperCase()}</span>
+                      <span className="text-green-400 ml-auto">separate stock</span>
+                    </div>
+                  )}
+
+                  {/* Category */}
                   <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase">Boxes in Stock</label>
-                    <div className="flex items-center gap-2">
-                      <input type="number" min="0" placeholder="e.g. 2"
-                        className="w-24 bg-slate-800 p-2 rounded-lg border border-purple-500/30 text-purple-400 font-bold text-center outline-none focus:border-purple-500"
-                        value={(editItem as any)._stock_boxes || ''}
-                        onChange={(e) => {
-                          const boxes = Number(e.target.value) || 0;
-                          const total = boxes * (Number(editItem.pack_size) || 1) * (Number(editItem.strip_size) || 1);
-                          setEditItem({ ...editItem, _stock_boxes: e.target.value, stock: String(total) });
-                        }}
-                      />
-                      <span className="text-[10px] text-slate-400 font-bold">
-                        = {Number(editItem.stock) || 0} tablets total
-                      </span>
+                    <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 block">Category</label>
+                    <select className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-white cursor-pointer text-sm"
+                      value={editItem.category || 'General'} tabIndex={3}
+                      onChange={e => {
+                        const cat = e.target.value;
+                        const d = CATEGORY_PACKAGING[cat] || CATEGORY_PACKAGING['General'];
+                        setEditItem({ ...editItem, category: cat, pack_size: editItem.pack_size || String(d.pack_size), strip_size: editItem.strip_size || String(d.strip_size), sell_unit: editItem.sell_unit || d.sell_unit });
+                      }}>
+                      {Object.keys(CATEGORY_PACKAGING).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Schedule H — compact toggle */}
+                  <label className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors border ${(editItem as any).is_h1 ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-800 border-slate-700 hover:border-slate-600'}`}>
+                    <input type="checkbox" className="w-4 h-4 accent-red-500" tabIndex={4}
+                      checked={(editItem as any).is_h1 || false}
+                      onChange={e => setEditItem({ ...editItem, is_h1: e.target.checked } as any)} />
+                    <div>
+                      <p className={`text-xs font-bold ${(editItem as any).is_h1 ? 'text-red-400' : 'text-slate-400'}`}>Schedule H / H1 Drug</p>
+                      {(editItem as any).is_h1 && <p className="text-[9px] text-red-400/70">Requires Doctor/Patient at POS</p>}
+                    </div>
+                  </label>
+
+                  {/* HSN Code */}
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-purple-400 mb-1 flex items-center gap-1">
+                      # HSN Code {!editItem.hsn_code && <span className="text-amber-400">(required for GST)</span>}
+                    </label>
+                    <input type="text" inputMode="numeric" placeholder="e.g. 3004" tabIndex={5}
+                      className="w-full bg-slate-800 p-2.5 rounded-xl border border-purple-500/30 outline-none focus:border-purple-500 font-mono text-purple-300 text-sm placeholder-slate-600 transition-all"
+                      value={editItem.hsn_code || ''} onChange={e => setEditItem({ ...editItem, hsn_code: e.target.value })} />
+                  </div>
+
+                  {/* Composition + Rack */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Composition / Salt</label>
+                      <input type="text" placeholder="e.g. Paracetamol 500mg" tabIndex={6}
+                        className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600 transition-all"
+                        value={editItem.composition || ''} onChange={e => setEditItem({ ...editItem, composition: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">Rack / Shelf</label>
+                      <input type="text" placeholder="e.g. Rack A" tabIndex={7}
+                        className="w-full bg-slate-800 p-2.5 rounded-xl border border-blue-500/30 outline-none text-sm placeholder-slate-600 transition-all"
+                        value={editItem.location || ''} onChange={e => setEditItem({ ...editItem, location: e.target.value })} />
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* 🧪 Volume Packaging: Syrups / Gels / Creams */}
-              {(editItem.sell_unit === 'piece' ||
-                ['Syrup','Injection','Ointment','Cream','Drops','Pharmacy'].includes(editItem.category)) && (
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 space-y-2">
-                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">🧪 Liquid/Volume Packaging</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Barcode */}
+                  <div className="relative">
+                    <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                    <input type="text" placeholder="Barcode (optional)" tabIndex={8}
+                      className="w-full bg-slate-800 p-2.5 pl-9 rounded-xl border border-slate-700 outline-none font-mono text-sm transition-all"
+                      value={editItem.barcode || ''} onChange={e => setEditItem({ ...editItem, barcode: e.target.value })} />
+                  </div>
+
+                  {/* Manufacturer + Reorder */}
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Pack Volume (ml/gm)</label>
-                      <input type="number" min="1" placeholder="e.g. 100"
-                        className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 text-blue-300 font-bold text-center outline-none focus:border-blue-500"
-                        value={(editItem as any).pack_volume || ''}
-                        onChange={(e) => setEditItem({ ...editItem, pack_volume: e.target.value })}
-                      />
-                      <p className="text-[8px] text-slate-500 mt-0.5">COUGHWILL SYP-1*100 → enter 100</p>
+                      <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Manufacturer</label>
+                      <input type="text" placeholder="e.g. Cipla" tabIndex={9}
+                        className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm placeholder-slate-600 transition-all"
+                        value={editItem.manufacturer || ''} onChange={e => setEditItem({ ...editItem, manufacturer: e.target.value })} />
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Volume Unit</label>
-                      <select
-                        className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 text-blue-300 font-bold outline-none focus:border-blue-500 cursor-pointer"
-                        value={(editItem as any).volume_unit || 'ml'}
-                        onChange={(e) => setEditItem({ ...editItem, volume_unit: e.target.value })}
-                      >
-                        <option value="ml">ml (Syrup/Liquid)</option>
-                        <option value="gm">gm (Gel/Cream)</option>
-                        <option value="mg">mg (Tablet/Capsule)</option>
-                        <option value="iu">IU (Injection)</option>
-                        <option value="pc">PC (Piece)</option>
-                      </select>
+                      <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Reorder Level</label>
+                      <input type="number" min="0" placeholder="10" tabIndex={10}
+                        className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-slate-300 font-bold text-center text-sm transition-all"
+                        value={editItem.reorder_level || '10'} onChange={e => setEditItem({ ...editItem, reorder_level: e.target.value })} />
                     </div>
                   </div>
-                  {(editItem as any).pack_volume > 1 && (
-                    <div className="bg-blue-500/10 rounded-lg p-2 text-center">
-                      <span className="text-[10px] font-black text-blue-300">PACK column dikhega: <span className="text-white">{(editItem as any).pack_volume} {((editItem as any).volume_unit || 'ml').toUpperCase()}</span></span>
-                    </div>
-                   )}
-                </div>
-              )}
-
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">
-                    {Number(editItem.strip_size) > 1 ? 'MRP/Strip (₹)' : 'MRP/Piece (₹)'}
-                  </label>
-                  <input type="number" placeholder="MRP" className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none" value={editItem.mrp || ""} onChange={(e) => setEditItem({ ...editItem, mrp: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">
-                    {Number(editItem.strip_size) > 1 ? 'Sell Price/Strip (₹)' : 'Sell Price/Piece (₹)'}
-                  </label>
-                  <input type="number" placeholder="Offer Price" className="w-full bg-slate-800 p-3 rounded-xl border border-blue-500/30 outline-none" value={editItem.price || ""} onChange={(e) => setEditItem({ ...editItem, price: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] font-bold uppercase text-green-400 mb-1 block">
-                    {Number(editItem.strip_size) > 1 ? '💰 Buying Price/Tablet (₹)' : '💰 Buying Price/Piece (₹)'}
-                  </label>
-                  <div className="relative">
-                    <input type="number" placeholder="Buying Price" className="w-full bg-slate-800 p-3 rounded-xl border border-green-500/30 outline-none focus:border-green-500 text-green-400 font-bold" value={editItem.buying_price || ""} onChange={(e) => setEditItem({ ...editItem, buying_price: e.target.value })} />
-                    {Number(editItem.strip_size) > 1 && Number(editItem.buying_price) > 0 && (
-                      <div className="text-[8px] text-green-500 font-bold mt-0.5 pl-1">
-                        = ₹{(Number(editItem.buying_price) * Number(editItem.strip_size)).toFixed(2)}/strip
+
+              {/* ══ RIGHT PANEL — Pricing & Stock ══ */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Pricing & Stock</p>
+
+                {/* Tablet Packaging */}
+                {isTablet && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 space-y-2">
+                    <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest">📦 Tablet Packaging</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">Strips/Box</label>
+                        <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500 text-sm"
+                          value={editItem.pack_size || 1} tabIndex={11} onChange={e => setEditItem({ ...editItem, pack_size: e.target.value })} />
                       </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">Tabs/Strip</label>
+                        <input type="number" min="1" className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold text-center outline-none focus:border-purple-500 text-sm"
+                          value={editItem.strip_size || 1} tabIndex={12} onChange={e => setEditItem({ ...editItem, strip_size: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">Sell As</label>
+                        <select className="w-full bg-slate-800 p-2 rounded-lg border border-slate-700 text-white font-bold outline-none focus:border-purple-500 cursor-pointer text-sm"
+                          value={editItem.sell_unit || 'strip'} tabIndex={13} onChange={e => setEditItem({ ...editItem, sell_unit: e.target.value })}>
+                          <option value="box">📦 Box</option>
+                          <option value="strip">💊 Strip (Default)</option>
+                          <option value="tablet">🔹 Single Tablet (Rare)</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="1" placeholder="+ Add Boxes" tabIndex={14}
+                        className="w-28 bg-slate-800 p-2 rounded-lg border border-green-500/30 text-green-400 font-bold text-center outline-none focus:border-green-500 text-sm"
+                        id="add_boxes_input" />
+                      <button tabIndex={15} onClick={() => {
+                        const inputEl = document.getElementById('add_boxes_input') as HTMLInputElement;
+                        const boxes = Number(inputEl?.value) || 0;
+                        if (boxes > 0) {
+                          const total = boxes * (Number(editItem.pack_size) || 1) * (Number(editItem.strip_size) || 1);
+                          setEditItem({ ...editItem, stock: String(Number(editItem.stock || 0) + total) });
+                          if (inputEl) inputEl.value = '';
+                          toast.success(`Added ${total} tablets to stock!`);
+                        }
+                      }} className="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all">Add</button>
+                      <span className="text-[10px] text-slate-400 font-bold ml-1">Total: {Number(editItem.stock) || 0} tabs</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Liquid/Volume Packaging */}
+                {isLiquid && !isTablet && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 space-y-2">
+                    <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">🧪 Volume Packaging</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">Pack Volume</label>
+                        <input type="number" min="1" placeholder="e.g. 100" tabIndex={11}
+                          className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 text-blue-300 font-bold text-center outline-none focus:border-blue-500 text-sm"
+                          value={(editItem as any).pack_volume || ''}
+                          onChange={e => setEditItem({ ...editItem, pack_volume: e.target.value })} />
+                        <p className="text-[8px] text-slate-500 mt-0.5">SYP-1*100 → enter 100</p>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">Unit</label>
+                        <select className="w-full bg-slate-800 p-2 rounded-lg border border-blue-500/30 text-blue-300 font-bold outline-none focus:border-blue-500 cursor-pointer text-sm"
+                          value={(editItem as any).volume_unit || 'ml'} tabIndex={12}
+                          onChange={e => setEditItem({ ...editItem, volume_unit: e.target.value })}>
+                          <option value="ml">ml — Syrup/Liquid</option>
+                          <option value="gm">gm — Gel/Cream</option>
+                          <option value="mg">mg — Capsule</option>
+                          <option value="iu">IU — Injection</option>
+                          <option value="pc">PC — Piece</option>
+                        </select>
+                      </div>
+                    </div>
+                    {(editItem as any).pack_volume > 1 && (
+                      <p className="text-[9px] font-black text-blue-300">PACK label: <span className="text-white">{(editItem as any).pack_volume} {((editItem as any).volume_unit || 'ml').toUpperCase()}</span></p>
+                    )}
+                  </div>
+                )}
+
+                {/* MRP + Sell Price — SAME UNIT (per strip/piece) */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">{isTablet ? 'MRP/Strip (₹)' : 'MRP/Piece (₹)'}</label>
+                    <input type="number" placeholder="MRP" tabIndex={16}
+                      className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-sm transition-all"
+                      value={editItem.mrp || ''} onChange={e => setEditItem({ ...editItem, mrp: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-blue-400 mb-1 block">{isTablet ? 'Sell Price/Strip (₹)' : 'Sell Price/Piece (₹)'}</label>
+                    <input type="number" placeholder="Sell Price" tabIndex={17}
+                      className="w-full bg-slate-800 p-2.5 rounded-xl border border-blue-500/30 outline-none focus:border-blue-500 text-sm transition-all"
+                      value={editItem.price || ''} onChange={e => setEditItem({ ...editItem, price: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* Buying Price — UNIFIED PER STRIP with live calc */}
+                <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-3">
+                  <label className="text-[9px] font-bold uppercase text-green-400 mb-1 block">
+                    💰 {isTablet ? 'Buying Price/Tablet (₹)' : 'Buying Price/Piece (₹)'}
+                    {isTablet && <span className="text-slate-500 font-normal ml-1">— enter per tablet (we auto × {ss})</span>}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input type="number" placeholder="Buying Price" tabIndex={18}
+                      className="flex-1 bg-slate-900 p-2.5 rounded-xl border border-green-500/30 outline-none focus:border-green-500 text-green-400 font-bold text-sm transition-all"
+                      value={editItem.buying_price || ''} onChange={e => setEditItem({ ...editItem, buying_price: e.target.value })} />
+                    {isTablet && Number(editItem.buying_price) > 0 && (
+                      <span className="text-[10px] text-green-500 font-black whitespace-nowrap">= ₹{(Number(editItem.buying_price) * ss).toFixed(2)}/strip</span>
                     )}
                   </div>
                 </div>
-                <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer" value={editItem.gst_rate || "18"} onChange={(e) => setEditItem({ ...editItem, gst_rate: e.target.value })}>
-                  {GST_SLABS.map(slab => <option key={slab.value} value={slab.value}>{slab.label}</option>)}
-                </select>
-              </div>
-              {/* Supplier */}
-              <div>
-                <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Supplier</label>
-                <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 outline-none text-white cursor-pointer" value={editItem.supplier_id || ""} onChange={(e) => setEditItem({ ...editItem, supplier_id: e.target.value })}>
-                  <option value="">None / Self</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              {/* 🔥 Discount Field in Edit */}
-              <div className="relative">
-                <label className="text-[10px] font-bold uppercase text-orange-400 mb-1 block">% Discount (Optional)</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min="0" max="100" placeholder="0"
-                    className="w-32 bg-slate-800 p-3 rounded-xl border border-orange-500/30 outline-none focus:border-orange-500 text-orange-400 font-bold text-center"
-                    value={editItem.discount_percent || "0"}
-                    onChange={e => setEditItem({ ...editItem, discount_percent: e.target.value })}
-                  />
-                  <span className="text-slate-400 text-sm font-bold">% OFF</span>
-                  {Number(editItem.discount_percent) > 0 && editItem.price && (
-                    <span className="text-green-400 text-xs font-bold">
-                      → Sale: ₹{Math.round(Number(editItem.price) * (1 - Number(editItem.discount_percent) / 100))}
-                    </span>
-                  )}
-                </div>
-              </div>
 
-              {/* Clone as New Variant button */}
-              <div className="bg-orange-500/8 border border-orange-500/20 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase text-orange-400 mb-1">Split into a New Size Variant</p>
-                <p className="text-[9px] text-slate-500 mb-3">
-                  Agar is product mein 2 sizes merge ho gayi hain (e.g. 15 GM + 30 GM ek saath),
-                  toh "Clone" karo — ek nayi separate product banegi zero stock ke saath.
-                  Phir original ka naam aur stock correct karo.
-                </p>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="New variant name e.g. CHYMERA GEL-15 GM"
-                    className="flex-1 bg-slate-800 p-2.5 rounded-xl border border-orange-500/30 outline-none text-orange-300 font-bold placeholder-slate-600 text-sm"
-                    id="clone-variant-name"
-                    defaultValue={editItem.name}
-                  />
-                  <button
-                    onClick={async () => {
-                      const newName = (document.getElementById('clone-variant-name') as HTMLInputElement)?.value?.trim();
-                      if (!newName) return toast.error('Variant name required!');
-                      if (newName === editItem.name) return toast.error('Name must be different from original!');
-                      const { error } = await supabase.from('inventory').insert([{
-                        name: newName,
-                        price: editItem.price,
-                        mrp: editItem.mrp,
-                        buying_price: editItem.buying_price,
-                        gst_rate: editItem.gst_rate,
-                        discount_percent: editItem.discount_percent || 0,
-                        stock: 0,
-                        category: editItem.category,
-                        supplier_id: editItem.supplier_id || null,
-                        store_id: activeStoreId,
-                        is_active: true,
-                        pack_size: editItem.pack_size || 1,
-                        strip_size: editItem.strip_size || 1,
-                        sell_unit: editItem.sell_unit || 'strip',
-                        hsn_code: editItem.hsn_code || null,
-                        manufacturer: editItem.manufacturer || null,
-                        composition: editItem.composition || null,
-                        reorder_level: editItem.reorder_level || 10,
-                        location: editItem.location || null,
-                      }]);
-                      if (error) { toast.error(error.message); return; }
-                      toast.success(`"${newName}" created with 0 stock! Add batches to it separately.`);
-                      fetchData();
-                    }}
-                    className="bg-orange-600 hover:bg-orange-500 px-4 py-2.5 rounded-xl font-black text-xs uppercase whitespace-nowrap transition-all active:scale-95"
-                  >
-                    Clone
-                  </button>
-                </div>
-              </div>
-
-              <button onClick={handleUpdateItem} className="w-full bg-yellow-600 hover:bg-yellow-700 py-4 rounded-2xl font-black mt-2 transition-all">UPDATE NOW</button>
-              <button onClick={() => setIsEditOpen(false)} className="w-full text-slate-500 py-2">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* 🔥 CUSTOM CONFIRM DIALOG */}
-      {confirmDialog.open && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center">
-            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
-              <AlertTriangle size={28} className="text-red-400" />
-            </div>
-            <h3 className="text-xl font-black text-white mb-2">{confirmDialog.title}</h3>
-            <p className="text-slate-400 text-sm mb-7 leading-relaxed">{confirmDialog.message}</p>
-            <div className="flex gap-3">
-              <button
-                onClick={closeConfirm}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-black text-sm text-slate-300 uppercase tracking-widest transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDialog.onConfirm}
-                className={`flex-1 ${confirmDialog.confirmColor || 'bg-red-600 hover:bg-red-500'} py-3 rounded-2xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95`}
-              >
-                {confirmDialog.confirmLabel || 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🔥 DEBIT NOTE MODAL */}
-      {debitNoteModal.open && debitNoteModal.batch && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-md shadow-2xl relative">
-            <button onClick={() => setDebitNoteModal({ open: false, batch: null })} className="absolute top-6 right-6 text-slate-500 hover:text-white bg-slate-800 p-2 rounded-full transition-all"><X size={18} /></button>
-            
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center shrink-0">
-                <Receipt size={24} className="text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-white italic">Return <span className="text-blue-500">Challan</span></h3>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Create Debit Note</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-5 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-xs text-slate-400">Product:</span>
-                <span className="text-xs font-bold text-white text-right">{debitNoteModal.batch.inventory?.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-slate-400">Batch & Qty:</span>
-                <span className="text-xs font-bold text-slate-300">#{debitNoteModal.batch.batch_number} ({debitNoteModal.batch.quantity} units)</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Select Supplier</label>
-                <select 
-                  className="w-full bg-slate-800 p-3.5 rounded-xl border border-slate-700 outline-none text-white cursor-pointer font-medium" 
-                  value={debitSupplierId} 
-                  onChange={(e) => setDebitSupplierId(e.target.value)}
-                >
-                  <option value="">-- Choose Supplier --</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                {!debitSupplierId && debitNoteModal.batch.inventory?.supplier_id === null && (
-                  <p className="text-[10px] text-orange-400 mt-1 font-medium">⚠️ This product does not have a default supplier.</p>
+                {/* Live Margin Card */}
+                {sellPrice > 0 && buyPerStrip > 0 && (
+                  <div className={`rounded-xl p-3 border flex items-center justify-between ${marginPct >= 15 ? 'bg-green-500/10 border-green-500/20' : marginPct >= 0 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                    <div>
+                      <p className="text-[9px] font-black uppercase text-slate-500">Live Margin</p>
+                      <p className={`text-lg font-black ${marginPct >= 15 ? 'text-green-400' : marginPct >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>{marginPct.toFixed(1)}%</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-slate-500">Per {isTablet ? 'strip' : 'piece'}</p>
+                      <p className="text-sm font-black text-white">₹{marginAmt.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-slate-500">MRP vs Sell</p>
+                      <p className="text-xs font-bold text-slate-400">{mrpPrice > 0 ? `${(((mrpPrice - sellPrice) / mrpPrice) * 100).toFixed(1)}% disc` : '—'}</p>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Debit Amount (₹)</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                  <input 
-                    type="number" 
-                    className="w-full bg-slate-800 p-3.5 pl-8 rounded-xl border border-slate-700 outline-none text-white font-bold" 
-                    value={debitAmount} 
-                    onChange={(e) => setDebitAmount(e.target.value)} 
-                  />
+                {/* GST — full width so text doesn't truncate */}
+                <div>
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">GST Slab</label>
+                  <select className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-white cursor-pointer text-sm"
+                    value={editItem.gst_rate || '18'} tabIndex={19} onChange={e => setEditItem({ ...editItem, gst_rate: e.target.value })}>
+                    {GST_SLABS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">Default is estimated Value at Risk. Adjust if needed.</p>
-              </div>
 
-              <button 
-                onClick={handleCreateDebitNote} 
-                disabled={debitNoteLoading}
-                className="w-full mt-4 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {debitNoteLoading ? <><Loader2 size={16} className="animate-spin" /> Processing...</> : "Generate Debit Note"}
+                {/* Supplier + Discount */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-slate-400 mb-1 block">Supplier</label>
+                    <select className="w-full bg-slate-800 p-2.5 rounded-xl border border-slate-700 outline-none text-white cursor-pointer text-sm"
+                      value={editItem.supplier_id || ''} tabIndex={20} onChange={e => setEditItem({ ...editItem, supplier_id: e.target.value })}>
+                      <option value="">None / Self</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-orange-400 mb-1 block">% Discount</label>
+                    <div className="flex items-center gap-1">
+                      <input type="number" min="0" max="100" placeholder="0" tabIndex={21}
+                        className="w-full bg-slate-800 p-2.5 rounded-xl border border-orange-500/30 outline-none focus:border-orange-500 text-orange-400 font-bold text-center text-sm transition-all"
+                        value={editItem.discount_percent || '0'} onChange={e => setEditItem({ ...editItem, discount_percent: e.target.value })} />
+                      <span className="text-slate-400 text-xs font-bold whitespace-nowrap">% OFF</span>
+                    </div>
+                    {Number(editItem.discount_percent) > 0 && editItem.price && (
+                      <p className="text-[9px] text-green-400 font-bold mt-0.5">→ ₹{Math.round(Number(editItem.price) * (1 - Number(editItem.discount_percent) / 100))}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Clone / Split Variant — collapsed accordion */}
+                <details className="bg-orange-500/8 border border-orange-500/20 rounded-xl">
+                  <summary className="text-[10px] font-black uppercase text-orange-400 px-3 py-2.5 cursor-pointer select-none flex items-center gap-2">
+                    ⚙️ Advanced: Split into New Size Variant
+                  </summary>
+                  <div className="px-3 pb-3 pt-1 space-y-2">
+                    <p className="text-[9px] text-slate-500">
+                      If two sizes are merged in one product (e.g. 15 GM + 30 GM), clone it as a separate product with 0 stock, then correct the original name.
+                    </p>
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="New variant name e.g. CHYMERA GEL-15 GM"
+                        className="flex-1 bg-slate-800 p-2 rounded-xl border border-orange-500/30 outline-none text-orange-300 font-bold placeholder-slate-600 text-sm"
+                        id="clone-variant-name" defaultValue={editItem.name} />
+                      <button
+                        onClick={async () => {
+                          const newName = (document.getElementById('clone-variant-name') as HTMLInputElement)?.value?.trim();
+                          if (!newName) return toast.error('Variant name required!');
+                          if (newName === editItem.name) return toast.error('Name must be different!');
+                          const { error } = await supabase.from('inventory').insert([{
+                            name: newName, price: editItem.price, mrp: editItem.mrp, buying_price: editItem.buying_price,
+                            gst_rate: editItem.gst_rate, discount_percent: editItem.discount_percent || 0, stock: 0,
+                            category: editItem.category, supplier_id: editItem.supplier_id || null, store_id: activeStoreId,
+                            is_active: true, pack_size: editItem.pack_size || 1, strip_size: editItem.strip_size || 1,
+                            sell_unit: editItem.sell_unit || 'strip', hsn_code: editItem.hsn_code || null,
+                            manufacturer: editItem.manufacturer || null, composition: editItem.composition || null,
+                            reorder_level: editItem.reorder_level || 10, location: editItem.location || null,
+                          }]);
+                          if (error) { toast.error(error.message); return; }
+                          toast.success(`"${newName}" created with 0 stock!`);
+                          fetchData();
+                        }}
+                        className="bg-orange-600 hover:bg-orange-500 px-3 py-2 rounded-xl font-black text-xs uppercase whitespace-nowrap transition-all active:scale-95">
+                        Clone
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            {/* ── Footer Actions ── */}
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center gap-3 shrink-0">
+              <button onClick={() => setIsEditOpen(false)} tabIndex={22} className="px-6 py-2.5 text-slate-500 hover:text-white font-bold text-sm transition-all">Cancel</button>
+              <button onClick={handleUpdateItem} id="btn-update-item" tabIndex={23} className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black py-2.5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-yellow-500/20">
+                ✓ UPDATE PRODUCT
               </button>
             </div>
+
           </div>
         </div>
-      )}
+  );
+}) ()}
+
+
+{/* 🔥 CUSTOM CONFIRM DIALOG */ }
+{
+  confirmDialog.open && (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center">
+        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
+          <AlertTriangle size={28} className="text-red-400" />
+        </div>
+        <h3 className="text-xl font-black text-white mb-2">{confirmDialog.title}</h3>
+        <p className="text-slate-400 text-sm mb-7 leading-relaxed">{confirmDialog.message}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={closeConfirm}
+            className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-black text-sm text-slate-300 uppercase tracking-widest transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmDialog.onConfirm}
+            className={`flex-1 ${confirmDialog.confirmColor || 'bg-red-600 hover:bg-red-500'} py-3 rounded-2xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95`}
+          >
+            {confirmDialog.confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
     </div>
+  )
+}
+
+{/* 🔥 DEBIT NOTE MODAL */ }
+{
+  debitNoteModal.open && debitNoteModal.batch && (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-md shadow-2xl relative">
+        <button onClick={() => setDebitNoteModal({ open: false, batch: null })} className="absolute top-6 right-6 text-slate-500 hover:text-white bg-slate-800 p-2 rounded-full transition-all"><X size={18} /></button>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center shrink-0">
+            <Receipt size={24} className="text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-white italic">Return <span className="text-blue-500">Challan</span></h3>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Create Debit Note</p>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-5 space-y-2">
+          <div className="flex justify-between">
+            <span className="text-xs text-slate-400">Product:</span>
+            <span className="text-xs font-bold text-white text-right">{debitNoteModal.batch.inventory?.name}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-xs text-slate-400">Batch & Qty:</span>
+            <span className="text-xs font-bold text-slate-300">#{debitNoteModal.batch.batch_number} ({debitNoteModal.batch.quantity} units)</span>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Select Supplier</label>
+            <select
+              className="w-full bg-slate-800 p-3.5 rounded-xl border border-slate-700 outline-none text-white cursor-pointer font-medium"
+              value={debitSupplierId}
+              onChange={(e) => setDebitSupplierId(e.target.value)}
+            >
+              <option value="">-- Choose Supplier --</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {!debitSupplierId && debitNoteModal.batch.inventory?.supplier_id === null && (
+              <p className="text-[10px] text-orange-400 mt-1 font-medium">⚠️ This product does not have a default supplier.</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Debit Amount (₹)</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+              <input
+                type="number"
+                className="w-full bg-slate-800 p-3.5 pl-8 rounded-xl border border-slate-700 outline-none text-white font-bold"
+                value={debitAmount}
+                onChange={(e) => setDebitAmount(e.target.value)}
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">Default is estimated Value at Risk. Adjust if needed.</p>
+          </div>
+
+          <button
+            onClick={handleCreateDebitNote}
+            disabled={debitNoteLoading}
+            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-sm text-white uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2"
+          >
+            {debitNoteLoading ? <><Loader2 size={16} className="animate-spin" /> Processing...</> : "Generate Debit Note"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+    </div >
   );
 }
