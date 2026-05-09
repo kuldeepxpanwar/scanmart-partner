@@ -43,7 +43,7 @@ export default function SuppliersPage() {
   const [isEditing, setIsEditing] = useState(false);
   const initialFormState = {
     id: "", name: "", contact_person: "", phone: "", email: "",
-    address: "", gstin: "", category: "General", status: "Active"
+    address: "", gstin: "", category: "Pharma (Ethical)", status: "Active"
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -374,8 +374,8 @@ export default function SuppliersPage() {
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-slate-500">Category</label>
                   <select className={inputCls + " cursor-pointer"} value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
-                    <option>General</option><option>Grocery/FMCG</option><option>Electronics</option>
-                    <option>Packaging</option><option>Logistics</option><option>Wholesaler</option>
+                    <option>Pharma (Ethical)</option><option>Pharma (Generic)</option><option>OTC</option>
+                    <option>Surgicals</option><option>Cosmetics</option><option>Wholesaler</option>
                   </select>
                 </div>
                 <div className="space-y-1">

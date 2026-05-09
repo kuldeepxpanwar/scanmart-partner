@@ -264,7 +264,7 @@ export default function CustomersPage() {
         customer_id: selectedKhataCustomer.id,
         amount: amount,
         type: "payment",
-        note: "Udhaar payment received"
+        note: "Patient credit payment received"
       });
       setCustomers(customers.map(c => c.id === selectedKhataCustomer.id ? { ...c, khata_balance: newBalance } : c));
       setKhataModalOpen(false);
@@ -424,7 +424,7 @@ export default function CustomersPage() {
                   <p className={`font-black text-xl ${index < 3 && showVIPOnly ? 'text-amber-500' : 'text-white'}`}>₹{formatCurrency(c.total_spent)}</p>
                 </div>
                 <div className="text-right cursor-pointer group" onClick={() => { if(c.khata_balance > 0) { setSelectedKhataCustomer(c); setKhataModalOpen(true); } }}>
-                  <p className="text-[9px] text-red-500/70 uppercase font-bold mb-1 group-hover:text-red-400 transition-colors">Udhaar (Khata)</p>
+                  <p className="text-[9px] text-red-500/70 uppercase font-bold mb-1 group-hover:text-red-400 transition-colors">Patient Credit</p>
                   <p className={`font-black text-xl transition-colors ${c.khata_balance > 0 ? 'text-red-500 group-hover:text-red-400' : 'text-slate-600'}`}>₹{formatCurrency(c.khata_balance || 0)}</p>
                 </div>
               </div>
@@ -615,7 +615,7 @@ export default function CustomersPage() {
               className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] w-full max-w-sm relative"
             >
               <button onClick={() => setKhataModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={18} /></button>
-              <h2 className="text-xl font-black text-white uppercase italic mb-4 flex items-center gap-2"><Book size={18} className="text-red-500" /> Settle Udhaar</h2>
+              <h2 className="text-xl font-black text-white uppercase italic mb-4 flex items-center gap-2"><Book size={18} className="text-red-500" /> Settle Credit</h2>
               
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 text-center">
                 <p className="text-xs text-slate-500 font-bold uppercase mb-1">{selectedKhataCustomer.name}'s Pending Dues</p>

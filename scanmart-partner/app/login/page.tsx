@@ -308,7 +308,7 @@ export default function LoginPage() {
                       </div>
                       <input
                         type="text"
-                        placeholder="e.g. Phoenix Supermarket"
+                        placeholder="e.g. Shivam Medical Store"
                         value={shopName}
                         onChange={(e) => setShopName(e.target.value)}
                         className="w-full bg-slate-950/50 border border-white/5 rounded-2xl py-4 pl-12 text-white placeholder:text-slate-600 outline-none focus:border-blue-500/50 focus:bg-slate-900/80 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"

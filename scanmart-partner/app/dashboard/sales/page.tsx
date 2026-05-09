@@ -409,7 +409,7 @@ export default function SalesPage() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return alert("❌ Cart Empty!");
-    if (paymentMethod === "udhaar" && !phone) return alert("❌ Phone number is required for Udhaar / Khata billing!");
+    if (paymentMethod === "udhaar" && !phone) return alert("❌ Phone number is required for Patient Credit billing!");
 
     // Check for H1 drugs and enforce compliance
     const hasH1 = cart.some((item: any) => item.is_h1);
@@ -930,7 +930,7 @@ export default function SalesPage() {
                   {m === 'card' && <CreditCard size={11} />}
                   {m === 'split' && <span className="text-[8px]">⚡</span>}
                   {m === 'udhaar' && <Book size={11} />}
-                  {m === 'split' ? 'Split' : m === 'udhaar' ? 'Udhaar' : m}
+                  {m === 'split' ? 'Split' : m === 'udhaar' ? 'Credit' : m}
                 </button>
               ))}
             </div>

@@ -27,13 +27,13 @@ export const Hero = () => {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
             </span>
             <span className="text-xs font-bold text-blue-600 dark:text-blue-300 tracking-wider uppercase">
-              Smart POS for Indian Retailers
+              Smart POS for Indian Pharmacies
             </span>
           </div>
 
           {/* FIXED: Headline matches what the product actually does */}
           <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white leading-tight mb-6">
-            Run Your Shop{" "}
+            Run Your Pharmacy{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 animate-gradient bg-300%">
               Smarter.
             </span>
@@ -41,9 +41,9 @@ export const Hero = () => {
 
           {/* FIXED: Description matches real product features */}
           <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-lg leading-relaxed">
-            Billing. Inventory. Staff. Analytics — all in one dashboard.
+            Billing. Inventory. Batch Tracking. GST Analytics — all in one dashboard.
             Built for{" "}
-            <span className="text-slate-900 dark:text-white font-semibold">kirana stores, pharmacies & supermarkets</span>{" "}
+            <span className="text-slate-900 dark:text-white font-semibold">pharmacies, medical stores & clinics</span>{" "}
             that want to grow faster.
           </p>
 
@@ -67,8 +67,8 @@ export const Hero = () => {
           <div className="mt-10 grid grid-cols-2 gap-3">
             {[
               "Fast Barcode Billing",
-              "Inventory Management",
-              "Staff Role Control",
+              "Batch & Expiry (FEFO)",
+              "H1 Drug Compliance",
               "Profit & GST Analytics",
             ].map((feat) => (
               <div key={feat} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
