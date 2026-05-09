@@ -2471,7 +2471,6 @@ export default function InventoryPage() {
                     </div>
                   </div>
                 </div>
-              </div>
 
               {/* ══ RIGHT PANEL — Pricing & Stock ══ */}
               <div className="flex-1 overflow-y-auto p-5 space-y-3">
