@@ -60,10 +60,10 @@ export const Features = () => {
             whileInView={{ opacity: 1, y: 0 }}
             className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mb-4"
           >
-            Everything your shop <span className="text-blue-600">needs.</span>
+            Everything your pharmacy <span className="text-blue-600">needs.</span>
           </motion.h2>
           <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-            Real features, shipped and working. No promises — only tools you can use today.
+            Real features for medical store billing, batch tracking, and compliance — shipped and working.
           </p>
         </div>
 

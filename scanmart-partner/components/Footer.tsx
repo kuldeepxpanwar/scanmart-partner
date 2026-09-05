@@ -21,7 +21,7 @@ export const Footer = () => {
               </span>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              A complete POS system for Indian retail — billing, inventory, staff, and analytics in one dashboard.
+              India's modern pharmacy POS system — fast billing, batch & expiry tracking, GST invoicing, and inventory management in one dashboard.
             </p>
             <a
               href="/login"
