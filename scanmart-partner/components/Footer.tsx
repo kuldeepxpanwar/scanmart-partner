@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Zap, Twitter, Linkedin, Instagram, Github } from "lucide-react";
+import { Zap, Linkedin, Instagram, Github } from "lucide-react";
 
 export const Footer = () => {
   return (
@@ -87,11 +87,15 @@ export const Footer = () => {
           </div>
 
           <div className="flex gap-6">
-            {[Twitter, Linkedin, Instagram, Github].map((Icon, i) => (
-              <a key={i} href="#" className="text-slate-500 hover:text-white transition-colors">
-                <Icon className="w-5 h-5" />
-              </a>
-            ))}
+            <a href="https://github.com/kuldeepxpanwar" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-white transition-colors">
+              <Github className="w-5 h-5" />
+            </a>
+            <a href="https://www.linkedin.com/in/kuldeepxpanwar/" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-white transition-colors">
+              <Linkedin className="w-5 h-5" />
+            </a>
+            <a href="https://www.instagram.com/kuldeepxpanwar" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-white transition-colors">
+              <Instagram className="w-5 h-5" />
+            </a>
           </div>
         </div>
 
