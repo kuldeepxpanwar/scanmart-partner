@@ -60,7 +60,7 @@ export const metadata: Metadata = {
       "Fast barcode billing, batch & expiry tracking, GST invoicing, and patient credit management. Built for Indian pharmacies. Free to start.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image.jpg",
         width: 1200,
         height: 630,
         alt: "ScanMart Pharmacy POS — Billing Dashboard Preview",
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
     title: "ScanMart — Pharmacy POS & Billing Software",
     description:
       "India's fastest pharmacy billing system. Barcode scanning, batch tracking, GST, and more.",
-    images: ["/og-image.png"],
+    images: ["/og-image.jpg"],
   },
 
   // ── Robots ────────────────────────────────────────────────
